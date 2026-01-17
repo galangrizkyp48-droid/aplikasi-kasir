@@ -14,6 +14,11 @@ export default defineConfig({
         short_name: 'POS UMKM',
         description: 'Aplikasi Kasir untuk UMKM',
         theme_color: '#ffffff',
+        background_color: '#ffffff',
+        display: 'standalone',
+        scope: '/',
+        start_url: '/',
+        orientation: 'portrait',
         icons: [
           {
             src: 'pwa-192x192.png',

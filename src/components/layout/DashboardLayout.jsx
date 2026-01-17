@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
+import { usePWA } from '../../hooks/usePWA';
 import { cn, formatRupiah } from '../../lib/utils';
 import {
     LayoutDashboard,
@@ -14,13 +15,14 @@ import {
     X,
     ShoppingBag,
     Lock,
-    Wallet
+    Wallet,
+    Download
 } from 'lucide-react';
 
 export default function DashboardLayout() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const user = useStore((state) => state.user);
-    const logout = useStore((state) => state.logout);
+    const { isInstallable, install } = usePWA();
+    const { user, logout } = useStore();
     const { shiftId, setShiftId } = useStore();
     const navigate = useNavigate();
 
@@ -280,6 +282,18 @@ Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
                         </NavLink>
                     ))}
                 </nav>
+
+                {isInstallable && (
+                    <div className="px-4 pb-2">
+                        <button
+                            onClick={install}
+                            className="w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white border border-dashed border-slate-300 dark:border-slate-700"
+                        >
+                            <Download className="w-5 h-5 mr-3" />
+                            Install Aplikasi
+                        </button>
+                    </div>
+                )}
 
                 <div className="p-4 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-3 mb-4 px-2">

@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useEffect } from 'react';
 import { useStore } from './lib/store';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
@@ -22,6 +24,17 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  const { updateServiceWorker } = useRegisterSW({
+    onRegistered(r) {
+      if (r) {
+        // Check for updates every 15 seconds (Aggressive for demo purposes)
+        setInterval(() => {
+          r.update();
+        }, 15000);
+      }
+    }
+  });
+
   return (
     <BrowserRouter>
       <Routes>

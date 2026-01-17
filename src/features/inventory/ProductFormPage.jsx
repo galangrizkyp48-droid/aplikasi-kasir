@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { ChevronLeft, Save } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
 
 export default function ProductFormPage() {
     const { user } = useStore();
@@ -19,12 +18,30 @@ export default function ProductFormPage() {
         barcode: ''
     });
 
+    const [categories, setCategories] = useState([]);
     const [isUnlimited, setIsUnlimited] = useState(false);
 
-    // Load existing product if edit mode
+    // Load initial data
     useEffect(() => {
-        if (isEditMode) {
-            db.products.get(Number(id)).then(product => {
+        const loadInitialData = async () => {
+            if (!user?.storeId) return;
+
+            // Load categories
+            const { data: catData } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('store_id', user.storeId);
+
+            if (catData) setCategories(catData);
+
+            // Load product if edit mode
+            if (isEditMode) {
+                const { data: product, error } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+
                 if (product) {
                     setFormData({
                         name: product.name,
@@ -37,30 +54,35 @@ export default function ProductFormPage() {
                         setIsUnlimited(true);
                     }
                 }
-            });
-        }
-    }, [id, isEditMode]);
+            }
+        };
 
-    // Load categories for dropdown
-    const categories = useLiveQuery(() => {
-        if (!user?.storeId) return [];
-        return db.categories.where('storeId').equals(user.storeId).toArray();
-    }, [user?.storeId]);
+        loadInitialData();
+    }, [id, isEditMode, user?.storeId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const data = {
-            ...formData,
+        const productData = {
+            name: formData.name,
+            category: formData.category,
             price: Number(formData.price),
             stock: isUnlimited ? -1 : Number(formData.stock),
-            storeId: user.storeId
+            barcode: formData.barcode,
+            store_id: user.storeId
         };
 
         try {
             if (isEditMode) {
-                await db.products.update(Number(id), data);
+                const { error } = await supabase
+                    .from('products')
+                    .update(productData)
+                    .eq('id', id);
+                if (error) throw error;
             } else {
-                await db.products.add(data);
+                const { error } = await supabase
+                    .from('products')
+                    .insert([productData]);
+                if (error) throw error;
             }
             navigate('/products');
         } catch (error) {
@@ -99,19 +121,28 @@ export default function ProductFormPage() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Kategori</label>
-                            <input
-                                list="categories"
-                                type="text"
+                            <select
+                                required
                                 value={formData.category}
                                 onChange={e => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                                placeholder="Pilih atau ketik baru"
-                            />
-                            <datalist id="categories">
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none"
+                            >
+                                <option value="" disabled>Pilih Kategori</option>
                                 {categories?.map(c => (
-                                    <option key={c.id} value={c.name} />
+                                    <option key={c.id} value={c.name}>{c.name}</option>
                                 ))}
-                            </datalist>
+                                <option value="new">+ Tambah Baru (Ketik Manual)</option>
+                            </select>
+                            {/* Fallback for manual entry if chosen */}
+                            {formData.category === 'new' && (
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    className="mt-2 w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                    placeholder="Nama Kategori Baru"
+                                    onChange={e => setFormData({ ...formData, category: e.target.value })}
+                                />
+                            )}
                         </div>
 
                         <div className="space-y-1.5">

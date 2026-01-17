@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Clock, Wallet, Lock, Banknote, Share2, Printer, CheckCircle2, X, ChefHat, Save } from 'lucide-react';
 import { formatRupiah, cn } from '../../lib/utils';
@@ -11,6 +10,10 @@ export default function POSPage() {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [customerName, setCustomerName] = useState('');
+
+    const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [settings, setSettings] = useState({ taxRate: 11 });
 
     // Payment UI State
     const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -25,14 +28,9 @@ export default function POSPage() {
         cart, addToCart, removeFromCart, clearCart,
         setShiftId, shiftId, user,
         currentOrderId, setCurrentOrderId, updateQuantity,
-        currentCustomerName, setCustomerNameStore // access store setter if needed (not exported directly, checking store.js)
+        currentCustomerName, setCustomerNameStore
     } = useStore();
-    // Wait, useStore export in store.js doesn't export setCustomerName separately in the object unless I added it.
-    // I added `setCustomerName` in step 877 to the store object.
 
-    // ...
-
-    // Fix: correct store access
     const setStoreCustomerName = useStore(state => state.setCustomerName);
     const storeCustomerName = useStore(state => state.currentCustomerName);
 
@@ -48,7 +46,14 @@ export default function POSPage() {
     // Check for active shift logic
     useEffect(() => {
         const checkShift = async () => {
-            const activeShift = await db.shifts.where('status').equals('open').first();
+            if (!user?.storeId) return;
+            const { data: activeShift } = await supabase
+                .from('shifts')
+                .select('*')
+                .eq('store_id', user.storeId)
+                .eq('status', 'open')
+                .single();
+
             if (activeShift) {
                 setShiftId(activeShift.id);
                 setIsShiftOpen(true);
@@ -58,7 +63,57 @@ export default function POSPage() {
             }
         };
         checkShift();
-    }, [shiftId]);
+    }, [shiftId, user?.storeId]);
+
+    // Data Loaders
+    useEffect(() => {
+        const loadPOSData = async () => {
+            if (!user?.storeId) return;
+
+            // Load categories
+            const { data: catData } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('store_id', user.storeId)
+                .order('name');
+            if (catData) setCategories(catData);
+
+            // Load settings
+            const { data: taxSetting } = await supabase
+                .from('settings')
+                .select('*')
+                .eq('store_id', user.storeId)
+                .eq('key', 'taxRate')
+                .single();
+
+            setSettings({
+                taxRate: taxSetting ? Number(taxSetting.value) : 11
+            });
+        };
+        loadPOSData();
+    }, [user?.storeId]);
+
+    // Products Loader with filtering
+    useEffect(() => {
+        const loadProducts = async () => {
+            if (!user?.storeId) return;
+            let query = supabase
+                .from('products')
+                .select('*')
+                .eq('store_id', user.storeId);
+
+            if (selectedCategory) {
+                query = query.eq('category', selectedCategory);
+            }
+            if (search) {
+                query = query.ilike('name', `%${search}%`);
+            }
+
+            const { data } = await query.order('name');
+            if (data) setProducts(data);
+        };
+        loadProducts();
+    }, [search, selectedCategory, user?.storeId]);
 
     // Reset payment state when modal opens
     useEffect(() => {
@@ -69,33 +124,6 @@ export default function POSPage() {
             setLastOrderId(null);
         }
     }, [showCheckoutModal]);
-
-    const products = useLiveQuery(
-        () => {
-            if (!user?.storeId) return [];
-            let collection = db.products.where('storeId').equals(user.storeId);
-            if (selectedCategory) {
-                collection = db.products.where({ storeId: user.storeId, category: selectedCategory });
-            }
-            return collection
-                .filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-                .toArray();
-        },
-        [search, selectedCategory, user?.storeId]
-    );
-
-    const categories = useLiveQuery(() => {
-        if (!user?.storeId) return [];
-        return db.categories.where('storeId').equals(user.storeId).toArray();
-    }, [user?.storeId]);
-
-    const settings = useLiveQuery(async () => {
-        if (!user?.storeId) return { taxRate: 11 };
-        const taxRate = await db.settings.where('[storeId+key]').equals([user.storeId, 'taxRate']).first();
-        return {
-            taxRate: taxRate ? Number(taxRate.value) : 11
-        };
-    }, [user?.storeId]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const taxRate = settings?.taxRate ?? 11;
@@ -113,101 +141,118 @@ export default function POSPage() {
 
     const processOrder = async (status) => {
         try {
-            // Ensure status is valid
-            // Ensure status is valid
-            // If status is 'pay', then 'completed'. If 'hold', then 'cooking'.
-            // If 'save', we KEEP the existing status (don't update it).
             let finalStatus = status;
-            if (status === 'pay') finalStatus = 'completed';
+            if (status === 'pay') finalStatus = 'paid'; // Changed from 'completed' to 'paid' to keep it in orders list
             else if (status === 'hold') finalStatus = 'cooking';
 
-            // Ensure we have a valid Shift ID
             let currentShiftId = shiftId;
             if (!currentShiftId) {
-                const openShift = await db.shifts.where('status').equals('open').first();
+                const { data: openShift } = await supabase
+                    .from('shifts')
+                    .select('id')
+                    .eq('store_id', user.storeId)
+                    .eq('status', 'open')
+                    .single();
                 if (openShift) currentShiftId = openShift.id;
             }
 
-            const finalCustomerName = customerName.trim() || (finalStatus === 'completed' ? 'Walk-in Customer' : 'Table Order');
+            const finalCustomerName = customerName.trim() || (finalStatus === 'paid' ? 'Walk-in Customer' : 'Table Order');
 
             let orderId = currentOrderId;
 
             if (orderId) {
                 // UPDATE existing order
                 const updateData = {
-                    subtotal,
-                    tax,
                     total,
-                    itemCount: cart.length,
-                    customerName: finalCustomerName,
-                    shiftId: currentShiftId
+                    customer_name: finalCustomerName,
+                    shift_id: currentShiftId
                 };
 
-                // Only update status if NOT 'save'
                 if (status !== 'save') {
                     updateData.status = finalStatus;
                 }
 
-                await db.orders.update(orderId, updateData);
+                const { error: updateError } = await supabase
+                    .from('orders')
+                    .update(updateData)
+                    .eq('id', orderId);
+
+                if (updateError) throw updateError;
 
                 // Clear old items and replace
-                await db.orderItems.where('orderId').equals(orderId).delete();
+                const { error: deleteError } = await supabase
+                    .from('order_items')
+                    .delete()
+                    .eq('order_id', orderId);
+
+                if (deleteError) throw deleteError;
             } else {
                 // CREATE new order
-                // 'save' on new order defaults to 'pending' if not specified? Or invalid?
-                // Assuming 'save' is only for existing. If new, default to pending.
                 const initialStatus = status === 'save' ? 'pending' : finalStatus;
 
-                orderId = await db.orders.add({
-                    status: initialStatus,
-                    subtotal,
-                    tax,
-                    total,
-                    itemCount: cart.length,
-                    createdAt: new Date(),
-                    customerName: finalCustomerName,
-                    shiftId: currentShiftId,
-                    storeId: user.storeId
-                });
+                const { data: newOrder, error: insertError } = await supabase
+                    .from('orders')
+                    .insert([{
+                        status: initialStatus,
+                        total,
+                        customer_name: finalCustomerName,
+                        shift_id: currentShiftId,
+                        store_id: user.storeId
+                    }])
+                    .select()
+                    .single();
+
+                if (insertError) throw insertError;
+                orderId = newOrder.id;
             }
 
             // Save Items
             const items = cart.map(item => ({
-                orderId,
-                productId: item.id,
+                order_id: orderId,
+                product_id: item.id,
                 name: item.name,
                 price: item.price,
                 quantity: item.quantity
             }));
-            await db.orderItems.bulkAdd(items);
 
-            // Update Stock if Completed
-            if (finalStatus === 'completed') {
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .insert(items);
+
+            if (itemsError) throw itemsError;
+
+            // Update Stock if Paid or Completed
+            if (finalStatus === 'completed' || finalStatus === 'paid') {
                 for (const item of cart) {
-                    if (item.stock !== -1) { // Assuming item.stock comes from cart which comes from product... wait, cart might not have stock if loaded from Order.
-                        // Ideally we fetch product current stock
-                        const product = await db.products.get(item.id);
-                        if (product && product.stock !== -1) {
-                            await db.products.update(item.id, { stock: Math.max(0, product.stock - item.quantity) });
-                        }
+                    const { data: product } = await supabase
+                        .from('products')
+                        .select('stock')
+                        .eq('id', item.id)
+                        .single();
+
+                    if (product && product.stock !== -1) {
+                        await supabase
+                            .from('products')
+                            .update({ stock: Math.max(0, product.stock - item.quantity) })
+                            .eq('id', item.id);
                     }
                 }
 
                 // Record Transaction
-                await db.transactions.add({
-                    orderId,
-                    paymentMethod,
-                    amount: total,
-                    cashReceived: paymentMethod === 'cash' ? Number(cashReceived) : total,
-                    change: paymentMethod === 'cash' ? change : 0,
-                    timestamp: new Date(),
-                    shiftId: currentShiftId,
-                    storeId: user.storeId
-                });
+                const { error: transError } = await supabase
+                    .from('transactions')
+                    .insert([{
+                        order_id: orderId,
+                        payment_method: paymentMethod,
+                        amount: total,
+                        shift_id: currentShiftId,
+                        store_id: user.storeId
+                    }]);
+
+                if (transError) throw transError;
 
                 setLastOrderId(orderId);
                 setIsPaymentSuccess(true);
-                // Don't close modal yet, show success screen
             } else {
                 clearCart();
                 setCurrentOrderId(null);

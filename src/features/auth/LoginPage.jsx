@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../lib/store';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../lib/db';
+import { supabase, seedDatabase } from '../../lib/supabase';
 
 export default function LoginPage() {
     const [isRegistering, setIsRegistering] = useState(false);
@@ -37,11 +37,20 @@ export default function LoginPage() {
                 return;
             }
 
-            // Check in DB
-            const user = await db.users.where('username').equals(formData.username).first();
+            // Check in Supabase
+            const { data: user, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('username', formData.username)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
 
             if (user && user.password === formData.password) {
-                setUser(user);
+                setUser({
+                    ...user,
+                    storeId: user.store_id
+                });
                 navigate('/dashboard');
             } else {
                 alert('Username atau password salah!');
@@ -58,7 +67,7 @@ export default function LoginPage() {
                 });
                 navigate('/dashboard');
             } else {
-                alert('Login error: ' + error.message + '\n\nTip: Coba clear browser data atau gunakan admin/admin');
+                alert('Login error: ' + error.message);
             }
         }
     };
@@ -71,9 +80,14 @@ export default function LoginPage() {
         }
 
         try {
-            // Check existing
-            const existing = await db.users.where('username').equals(regData.username).count();
-            if (existing > 0) {
+            // Check existing in Supabase
+            const { data: existing, error: checkError } = await supabase
+                .from('users')
+                .select('username')
+                .eq('username', regData.username);
+
+            if (checkError) throw checkError;
+            if (existing && existing.length > 0) {
                 alert('Username sudah digunakan!');
                 return;
             }
@@ -81,36 +95,32 @@ export default function LoginPage() {
             // Generate new Store ID
             const newStoreId = Date.now().toString();
 
-            await db.users.add({
+            const payload = {
                 name: regData.name,
                 username: regData.username,
                 password: regData.password,
-                role: regData.role,
-                pin: regData.pin,
-                storeId: newStoreId
-            });
+                role: 'owner', // Force owner role for new signups
+                store_id: newStoreId,
+                pin: regData.pin || null // Send null if empty
+            };
 
-            // Seed initial data for this store
-            // Import seedDatabase from db.js (need to ensure import)
-            // Assuming seedDatabase is exported, I need to check imports.
-            // Wait, import is `import { db } from ...` I need `import { db, seedDatabase }`
+            const { error: regError } = await supabase.from('users').insert([payload]);
 
-            // To be safe, I'll update the import in a separate call or assume I can do it here if possible? 
-            // I'll add the logic here and fix import in next step if missed. 
-            // Actually, better to fix import first? No, I'll assume seedDatabase access via import update.
-            // But wait, I only imported `db` in step 893.
+            if (regError) {
+                console.log('Registration Payload:', payload);
+                console.error('Registration Error:', regError);
+                throw regError;
+            }
 
-            // I'll assume I'll fix imports.
-
-            // Seed
-            const { seedDatabase } = await import('../../lib/db');
+            // Seed initial data for this store in Supabase
             await seedDatabase(newStoreId);
 
             alert('Registrasi Berhasil! Silakan login.');
             setIsRegistering(false);
             setFormData({ username: regData.username, password: '' });
         } catch (error) {
-            alert('Gagal registrasi: ' + error.message);
+            console.error('Full Error:', error);
+            alert(`Gagal registrasi: ${error.message} (${error.details || error.hint || 'No details'})`);
         }
     };
 
@@ -215,8 +225,7 @@ export default function LoginPage() {
                             Masuk
                         </button>
                         <div className="mt-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-                            <p className="font-semibold mb-1">Demo Credentials:</p>
-                            <p>Username: <span className="font-mono text-slate-600 dark:text-slate-300">admin</span> • Password: <span className="font-mono text-slate-600 dark:text-slate-300">admin</span></p>
+                            <p className="font-semibold mb-1">Aplikasi yang dibuat oleh Galang untuk mendukung UMKM</p>
                         </div>
                     </div>
                 </form>

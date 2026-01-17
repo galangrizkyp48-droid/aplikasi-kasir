@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { cn, formatRupiah } from '../../lib/utils';
 import {
@@ -14,7 +13,8 @@ import {
     Menu,
     X,
     ShoppingBag,
-    Lock
+    Lock,
+    Wallet
 } from 'lucide-react';
 
 export default function DashboardLayout() {
@@ -24,29 +24,44 @@ export default function DashboardLayout() {
     const { shiftId, setShiftId } = useStore();
     const navigate = useNavigate();
 
-    // Live fetching of Store Name
-    const storeName = useLiveQuery(async () => {
-        const setting = await db.settings.get('storeName');
-        return setting?.value || 'POS UMKM';
-    });
+    const [storeName, setStoreName] = useState('POS UMKM');
+    const [activeShift, setActiveShift] = useState(null);
 
-    // Live fetching of active shift details for the header
-    const activeShift = useLiveQuery(async () => {
-        if (!shiftId) return null;
-        return await db.shifts.get(shiftId);
-    }, [shiftId]);
-
-    // Global check for open shift on app load (fixes persistence issues)
-    // CORRECTED: Using useEffect instead of useState for side effects
+    // Initial Loaders
     useEffect(() => {
-        const checkOpenShift = async () => {
-            const openShift = await db.shifts.where('status').equals('open').first();
+        const loadInitial = async () => {
+            if (!user?.storeId) return;
+
+            // Load Store Name
+            const { data: storeSetting } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('store_id', user.storeId)
+                .eq('key', 'storeName')
+                .single();
+            if (storeSetting) setStoreName(storeSetting.value);
+
+            // Check for open shift
+            const { data: openShift } = await supabase
+                .from('shifts')
+                .select('*')
+                .eq('store_id', user.storeId)
+                .eq('status', 'open')
+                .single();
+
             if (openShift) {
                 setShiftId(openShift.id);
+                setActiveShift(openShift);
+                setShowStartWorkModal(false);
+            } else {
+                setShiftId(null);
+                setActiveShift(null);
+                setShowStartWorkModal(true);
             }
         };
-        checkOpenShift();
-    }, []);
+        loadInitial();
+    }, [user?.storeId, shiftId]);
+
     const handleLogout = () => {
         logout();
         navigate('/login');
@@ -57,40 +72,33 @@ export default function DashboardLayout() {
     const [startCash, setStartCash] = useState('');
 
     // End Work Modal State
-    const [showEndWorkModal, setShowEndShiftModal] = useState(false); // Renamed for clarity internally
+    const [showEndWorkModal, setShowEndShiftModal] = useState(false);
     const [endWorkStats, setEndShiftStats] = useState(null);
-
-    // Initial Check for Open Shift / Start Work Modal
-    useEffect(() => {
-        const checkShift = async () => {
-            const openShift = await db.shifts.where('status').equals('open').first();
-            if (openShift) {
-                setShiftId(openShift.id);
-                setShowStartWorkModal(false);
-            } else {
-                setShiftId(null);
-                setShowStartWorkModal(true); // Force Start Work
-            }
-        };
-        checkShift();
-    }, []);
 
     const handleStartWork = async (e) => {
         e.preventDefault();
         if (!startCash) return alert('Masukkan modal awal untuk mulai bekerja');
+        if (!user?.storeId) return alert('Gagal: Store ID tidak ditemukan. Silakan login ulang.');
 
         try {
-            const id = await db.shifts.add({
-                startTime: new Date(),
-                cashierId: user?.id || 'unknown',
-                startCash: Number(startCash),
-                status: 'open',
-                storeId: user?.storeId
-            });
-            setShiftId(id);
+            const { data: newShift, error } = await supabase
+                .from('shifts')
+                .insert([{
+                    start_time: new Date().toISOString(),
+                    cashier_id: user?.id || 'unknown',
+                    start_cash: Number(startCash),
+                    status: 'open',
+                    store_id: user.storeId
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            setShiftId(newShift.id);
             setShowStartWorkModal(false);
             alert('Selamat Bekerja! Shift dimulai.');
         } catch (error) {
+            console.error('Shift start error:', error);
             alert('Gagal memulai shift: ' + error.message);
         }
     };
@@ -100,12 +108,21 @@ export default function DashboardLayout() {
 
         try {
             // 1. Fetch Sales Stats
-            const transactions = await db.transactions.where('shiftId').equals(shiftId).toArray();
-            const totalSales = transactions.reduce((sum, t) => sum + t.amount, 0);
-            const txCount = transactions.length;
+            const { data: transactions } = await supabase
+                .from('transactions')
+                .select('amount')
+                .eq('shift_id', shiftId);
+
+            const totalSales = transactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+            const txCount = transactions?.length || 0;
 
             // 2. Fetch Shift Info
-            const currentShift = await db.shifts.get(shiftId);
+            const { data: currentShift } = await supabase
+                .from('shifts')
+                .select('*')
+                .eq('id', shiftId)
+                .single();
+
             if (!currentShift) {
                 alert('Shift error. Resetting.');
                 setShiftId(null);
@@ -113,27 +130,33 @@ export default function DashboardLayout() {
                 return;
             }
 
-            // 3. Fetch Shopping List Expenses (Today's active lists)
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date();
-            endOfDay.setHours(23, 59, 59, 999);
+            // 3. Fetch Shopping List Expenses
+            const today = new Date().toISOString().split('T')[0];
+            const { data: shoppingLists } = await supabase
+                .from('shopping_lists')
+                .select('total_estimated')
+                .eq('store_id', user.storeId)
+                .eq('date', today);
 
-            const shoppingLists = await db.shoppingLists
-                .where('date')
-                .between(startOfDay, endOfDay, true, true)
-                .toArray();
+            const totalShopping = shoppingLists?.reduce((sum, list) => sum + (list.total_estimated || 0), 0) || 0;
 
-            const totalShopping = shoppingLists.reduce((sum, list) => sum + (list.totalEstimated || 0), 0);
+            // 4. Fetch Operational Expenses (New)
+            const { data: expenses } = await supabase
+                .from('expenses')
+                .select('amount')
+                .eq('shift_id', shiftId);
 
-            // 4. Set Stats
+            const totalExpenses = expenses?.reduce((sum, exp) => sum + (exp.amount || 0), 0) || 0;
+
+            // 5. Set Stats
             setEndShiftStats({
                 shift: currentShift,
                 totalSales,
                 txCount,
                 totalShopping,
-                netIncome: totalSales - totalShopping,
-                expectedCash: (currentShift.startCash || 0) + totalSales
+                totalExpenses, // Added
+                netIncome: totalSales - totalShopping - totalExpenses, // Updated Formula
+                expectedCash: (currentShift.start_cash || 0) + totalSales - totalExpenses // Assumes expenses are taken from cash drawer
             });
             setShowEndShiftModal(true);
         } catch (e) {
@@ -147,34 +170,37 @@ export default function DashboardLayout() {
 
         try {
             // Close all active shopping lists for today
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date();
-            endOfDay.setHours(23, 59, 59, 999);
-
-            await db.shoppingLists
-                .where('date')
-                .between(startOfDay, endOfDay, true, true)
-                .filter(l => l.status === 'active')
-                .modify({ status: 'closed' });
+            const today = new Date().toISOString().split('T')[0];
+            await supabase
+                .from('shopping_lists')
+                .update({ status: 'closed' })
+                .eq('store_id', user.storeId)
+                .eq('date', today)
+                .eq('status', 'active');
 
             // Close Shift
-            await db.shifts.update(shiftId, {
-                endTime: new Date(),
-                status: 'closed',
-                totalSales: endWorkStats.totalSales,
-                endCash: endWorkStats.expectedCash
-            });
+            const { error } = await supabase
+                .from('shifts')
+                .update({
+                    end_time: new Date(),
+                    status: 'closed',
+                    total_sales: endWorkStats.totalSales,
+                    end_cash: endWorkStats.expectedCash
+                })
+                .eq('id', shiftId);
 
-            // Send to WhatsApp (Optional auto-open)
+            if (error) throw error;
+
+            // Send to WhatsApp
             const message = `*Laporan Pekerjaan: ${new Date().toLocaleDateString('id-ID')}*
 ---------------------------
 Kasir: ${user?.name || 'Staff'}
-Shift: ${new Date(endWorkStats.shift.startTime).toLocaleTimeString()} - ${new Date().toLocaleTimeString()}
+Shift: ${new Date(endWorkStats.shift.start_time).toLocaleTimeString()} - ${new Date().toLocaleTimeString()}
 
 *Ringkasan Keuangan*
 Penjualan: ${formatRupiah(endWorkStats.totalSales)} (${endWorkStats.txCount} Trx)
-Pengeluaran Belanja: ${formatRupiah(endWorkStats.totalShopping)}
+Belanja Bahan: ${formatRupiah(endWorkStats.totalShopping)}
+Operasional: ${formatRupiah(endWorkStats.totalExpenses)}
 ---------------------------
 *Pendapatan Bersih: ${formatRupiah(endWorkStats.netIncome)}*
 Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
@@ -206,7 +232,8 @@ Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
         { icon: ShoppingCart, label: 'Kasir', href: '/pos' },
         { icon: ShoppingBag, label: 'Pesanan', href: '/orders' },
         { icon: Package, label: 'Produk', href: '/products' },
-        { icon: ShoppingBag, label: 'List Belanja', href: '/shopping-list' }, // Reusing ShoppingBag or use ClipboardList
+        { icon: ShoppingBag, label: 'List Belanja', href: '/shopping-list' },
+        { icon: Wallet, label: 'Pengeluaran', href: '/expenses' },
         { icon: FileText, label: 'Laporan', href: '/reports' },
         { icon: Settings, label: 'Pengaturan', href: '/settings' },
     ];
@@ -335,13 +362,17 @@ Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
 
                         <div className="p-6 space-y-6 overflow-y-auto" id="report-card">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 col-span-2">
                                     <p className="text-sm text-green-700 dark:text-green-400 mb-1">Total Penjualan</p>
                                     <p className="text-xl font-bold text-green-900 dark:text-white">{formatRupiah(endWorkStats.totalSales)}</p>
                                 </div>
                                 <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                                    <p className="text-sm text-red-700 dark:text-red-400 mb-1">Pengeluaran Belanja</p>
-                                    <p className="text-xl font-bold text-red-900 dark:text-white">{formatRupiah(endWorkStats.totalShopping)}</p>
+                                    <p className="text-sm text-red-700 dark:text-red-400 mb-1">Belanja Bahan</p>
+                                    <p className="text-lg font-bold text-red-900 dark:text-white">{formatRupiah(endWorkStats.totalShopping)}</p>
+                                </div>
+                                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                                    <p className="text-sm text-orange-700 dark:text-orange-400 mb-1">Operasional</p>
+                                    <p className="text-lg font-bold text-orange-900 dark:text-white">{formatRupiah(endWorkStats.totalExpenses)}</p>
                                 </div>
                             </div>
 
@@ -413,7 +444,7 @@ Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
                                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                 <span className="text-xs font-semibold text-green-700 dark:text-green-400">
                                     Shift Aktif
-                                    {activeShift && ` (${new Date(activeShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
+                                    {activeShift && ` (${new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
                                 </span>
                                 <button
                                     onClick={prepareEndWork}

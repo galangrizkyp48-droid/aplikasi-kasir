@@ -1,37 +1,56 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { formatRupiah } from '../../lib/utils';
 import { TrendingUp, ShoppingBag, Package } from 'lucide-react';
 import { useStore } from '../../lib/store';
 
 export default function DashboardPage() {
-    const { shiftId } = useStore();
+    const { shiftId, user } = useStore();
+    const [stats, setStats] = useState({
+        totalSales: 0,
+        totalTransactions: 0,
+        productCount: 0
+    });
 
-    const stats = useLiveQuery(async () => {
-        if (!shiftId) {
-            return {
-                totalSales: 0,
-                totalTransactions: 0,
-                productCount: await db.products.count()
-            };
-        }
+    useEffect(() => {
+        const fetchStats = async () => {
+            if (!user?.storeId) return;
 
-        // Fetch orders ONLY for the current shift
-        const orders = await db.orders.where('shiftId').equals(shiftId).toArray();
-        const productCount = await db.products.count();
+            // Fetch Product Count
+            const { count: productCount } = await supabase
+                .from('products')
+                .select('*', { count: 'exact', head: true })
+                .eq('store_id', user.storeId);
 
-        const totalSales = orders.reduce((sum, order) =>
-            sum + (order.status === 'completed' ? order.total : 0), 0
-        );
+            if (!shiftId) {
+                setStats({
+                    totalSales: 0,
+                    totalTransactions: 0,
+                    productCount: productCount || 0
+                });
+                return;
+            }
 
-        const totalTransactions = orders.filter(o => o.status === 'completed').length;
+            // Fetch orders for current shift
+            const { data: orders } = await supabase
+                .from('orders')
+                .select('total, status')
+                .eq('shift_id', shiftId);
 
-        return {
-            totalSales,
-            totalTransactions,
-            productCount
+            const totalSales = orders?.reduce((sum, order) =>
+                sum + ((order.status === 'completed' || order.status === 'paid') ? (order.total || 0) : 0), 0
+            ) || 0;
+
+            const totalTransactions = orders?.filter(o => o.status === 'completed' || o.status === 'paid').length || 0;
+
+            setStats({
+                totalSales,
+                totalTransactions,
+                productCount: productCount || 0
+            });
         };
-    }, [shiftId]);
+        fetchStats();
+    }, [shiftId, user?.storeId]);
 
     return (
         <div className="space-y-6">

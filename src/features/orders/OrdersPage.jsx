@@ -1,56 +1,126 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { formatRupiah, cn } from '../../lib/utils';
-import { Clock, ChefHat, CheckCircle2, PackageCheck, X, Wallet, CreditCard, Banknote, Edit2, Share2, Printer } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle2, PackageCheck, X, Wallet, CreditCard, Banknote, Edit2, Share2, Printer, ArrowLeftRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 
 export default function OrdersPage() {
-    const orders = useLiveQuery(() =>
-        db.orders.orderBy('createdAt').reverse().toArray()
-    );
+    const { user, loadOrder } = useStore();
+    const [orders, setOrders] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [showSplitModal, setShowSplitModal] = useState(false);
+    const [itemsToSplit, setItemsToSplit] = useState(new Set());
+    const [isSplitting, setIsSplitting] = useState(false);
+    const [splitCustomerName, setSplitCustomerName] = useState('');
+
     const [orderItems, setOrderItems] = useState([]);
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [cashReceived, setCashReceived] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [showReceipt, setShowReceipt] = useState(false);
 
-    // Hooks
-    const { loadOrder } = useStore(); // Ensure this action exists in store
+    // Merge States
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [targetMergeOrder, setTargetMergeOrder] = useState(null);
+    const [isMerging, setIsMerging] = useState(false);
+
     const navigate = useNavigate();
 
-    const handleResumeOrder = async (order) => {
-        // Fetch items for this order
-        const items = await db.orderItems.where('orderId').equals(order.id).toArray();
-        // Load into POS Store
-        // Load into POS Store
-        loadOrder(order.id, items, order.customerName);
-        // Navigate to POS
-        navigate('/pos');
+    const fetchOrders = async () => {
+        if (!user?.storeId) return;
+        setIsLoading(true);
+        console.log('Fetching orders for store:', user?.storeId);
+
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('store_id', user.storeId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching orders:', error);
+        } else {
+            console.log('Orders fetched:', data?.length);
+            setOrders(data || []);
+        }
+        setIsLoading(false);
     };
 
-    // Fetch items when order is selected for payment
     useEffect(() => {
-        if (selectedOrder) {
-            db.orderItems.where('orderId').equals(selectedOrder.id).toArray()
-                .then(items => setOrderItems(items));
-            setPaymentMethod('cash');
-            setCashReceived('');
-            setCustomerName(selectedOrder.customerName || 'Guest');
-            setShowReceipt(false);
-        } else {
-            setOrderItems([]);
+        if (!user?.storeId) return;
+
+        fetchOrders();
+
+        const channel = supabase
+            .channel('orders_channel')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'orders', filter: `store_id=eq.${user.storeId}` },
+                (payload) => {
+                    console.log('Realtime update:', payload);
+                    if (payload.event === 'INSERT') {
+                        setOrders(prev => [payload.new, ...prev]);
+                    } else if (payload.event === 'UPDATE') {
+                        setOrders(prev => prev.map(o => o.id === payload.new.id ? payload.new : o));
+                    } else if (payload.event === 'DELETE') {
+                        setOrders(prev => prev.filter(o => o.id !== payload.old.id));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.storeId]);
+
+    const handleResumeOrder = async (order) => {
+        const { data: items } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', order.id);
+
+        if (items) {
+            const mappedItems = items.map(it => ({
+                id: it.product_id,
+                name: it.name,
+                price: it.price,
+                quantity: it.quantity
+            }));
+            loadOrder(order.id, mappedItems, order.customer_name);
+            navigate('/pos');
         }
+    };
+
+    useEffect(() => {
+        const loadItems = async () => {
+            if (selectedOrder) {
+                const { data: items } = await supabase
+                    .from('order_items')
+                    .select('*')
+                    .eq('order_id', selectedOrder.id);
+
+                if (items) setOrderItems(items);
+                setPaymentMethod('cash');
+                setCashReceived('');
+                setCustomerName(selectedOrder.customer_name || 'Guest');
+                setShowReceipt(false);
+            } else {
+                setOrderItems([]);
+            }
+        };
+        loadItems();
     }, [selectedOrder]);
 
     const getStatusColor = (status) => {
         switch (status) {
             case 'pending': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
             case 'cooking': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-            case 'ready': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case 'ready': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
+            case 'paid': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
             case 'completed': return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400';
             default: return 'bg-gray-100 text-gray-700';
         }
@@ -61,21 +131,80 @@ export default function OrdersPage() {
             case 'pending': return Clock;
             case 'cooking': return ChefHat;
             case 'ready': return CheckCircle2;
+            case 'paid': return Wallet;
             case 'completed': return PackageCheck;
             default: return Clock;
         }
     };
 
     const updateStatus = async (id, newStatus) => {
-        if (newStatus === 'completed') {
-            const order = orders.find(o => o.id === id);
-            setSelectedOrder(order);
+        const { error } = await supabase
+            .from('orders')
+            .update({ status: newStatus })
+            .eq('id', id);
+
+        if (error) {
+            alert('Gagal update status: ' + error.message);
         } else {
-            await db.orders.update(id, { status: newStatus });
+            fetchOrders();
         }
     };
 
+    const handleMarkAsPaid = async (order) => {
+        // Removed confirmation for faster POS workflow
 
+        try {
+            // 1. Fetch Order Items to deduct stock
+            const { data: items, error: fetchError } = await supabase
+                .from('order_items')
+                .select('*')
+                .eq('order_id', order.id);
+
+            if (fetchError) throw fetchError;
+
+            // 2. Update Stock
+            for (const item of items) {
+                const { data: product } = await supabase
+                    .from('products')
+                    .select('stock')
+                    .eq('id', item.product_id)
+                    .single();
+
+                if (product && product.stock !== -1) {
+                    await supabase
+                        .from('products')
+                        .update({ stock: Math.max(0, product.stock - item.quantity) })
+                        .eq('id', item.product_id);
+                }
+            }
+
+            // 3. Record Transaction
+            const { error: transError } = await supabase
+                .from('transactions')
+                .insert([{
+                    order_id: order.id,
+                    payment_method: 'cash', // Defaulting to cash for 'Quick Pay' in Orders Page
+                    amount: order.total,
+                    shift_id: order.shift_id,
+                    store_id: user.storeId
+                }]);
+
+            if (transError) throw transError;
+
+            // 4. Update Order Status
+            await updateStatus(order.id, 'paid');
+
+            // Optimistic Update
+            setOrders(prev => prev.map(o => o.id == order.id ? { ...o, status: 'paid' } : o));
+            setSelectedOrder(null); // Close any open details
+
+            alert('Pembayaran berhasil dicatat!');
+
+        } catch (error) {
+            console.error('Payment Error:', error);
+            alert('Gagal memproses pembayaran: ' + error.message);
+        }
+    };
 
     const sendWhatsApp = () => {
         if (!selectedOrder) return;
@@ -95,6 +224,138 @@ export default function OrdersPage() {
     const change = paymentMethod === 'cash' && cashReceived ? Number(cashReceived) - selectedOrder?.total : 0;
     const canPay = paymentMethod === 'qris' || (paymentMethod === 'cash' && Number(cashReceived) >= selectedOrder?.total);
 
+    const toggleSplitItem = (itemId) => {
+        const newSet = new Set(itemsToSplit);
+        if (newSet.has(itemId)) {
+            newSet.delete(itemId);
+        } else {
+            newSet.add(itemId);
+        }
+        setItemsToSplit(newSet);
+    };
+
+    const handleSplitOrder = async () => {
+        if (!selectedOrder || itemsToSplit.size === 0) return;
+        setIsSplitting(true);
+
+        try {
+            const itemsToMove = orderItems.filter(item => itemsToSplit.has(item.id));
+            const itemsToKeep = orderItems.filter(item => !itemsToSplit.has(item.id));
+
+            if (itemsToKeep.length === 0) {
+                alert("Tidak bisa memindahkan semua item. Gunakan fitur edit atau hapus pesanan.");
+                setIsSplitting(false);
+                return;
+            }
+
+            const newTotal = itemsToMove.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const newTax = newTotal * 0.11;
+            const newFinalTotal = newTotal + newTax;
+
+            const oldTotal = itemsToKeep.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const oldTax = oldTotal * 0.11;
+            const oldFinalTotal = oldTotal + oldTax;
+
+            // Create New Order
+            const { data: newOrder, error: createError } = await supabase
+                .from('orders')
+                .insert([{
+                    store_id: user.storeId,
+                    shift_id: selectedOrder.shift_id,
+                    customer_name: splitCustomerName || `${selectedOrder.customer_name} (Split)`,
+                    status: selectedOrder.status === 'paid' ? 'pending' : selectedOrder.status,
+                    total: newFinalTotal
+                }])
+                .select()
+                .single();
+
+            if (createError) throw createError;
+
+            // Move items
+            const { error: moveError } = await supabase
+                .from('order_items')
+                .update({ order_id: newOrder.id })
+                .in('id', Array.from(itemsToSplit));
+
+            if (moveError) throw moveError;
+
+            // Update Old Order
+            const { error: updateError } = await supabase
+                .from('orders')
+                .update({
+                    total: oldFinalTotal
+                })
+                .eq('id', selectedOrder.id);
+
+            if (updateError) throw updateError;
+
+            alert('Pesanan berhasil dipisah!');
+            setShowSplitModal(false);
+            setItemsToSplit(new Set());
+            setSelectedOrder(null);
+            setSplitCustomerName('');
+            fetchOrders();
+
+        } catch (error) {
+            console.error('Split error:', error);
+            alert('Gagal memisah pesanan: ' + error.message);
+        } finally {
+            setIsSplitting(false);
+        }
+    };
+
+    const handleMergeOrder = async () => {
+        if (!selectedOrder || !targetMergeOrder) return;
+        setIsMerging(true);
+
+        try {
+            const { error: moveError } = await supabase
+                .from('order_items')
+                .update({ order_id: targetMergeOrder.id })
+                .eq('order_id', selectedOrder.id);
+
+            if (moveError) throw moveError;
+
+            // Recalculate target order total
+            const { data: newTargetItems } = await supabase
+                .from('order_items')
+                .select('*')
+                .eq('order_id', targetMergeOrder.id);
+
+            const newTotal = newTargetItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const newTax = newTotal * 0.11;
+            const newFinalTotal = newTotal + newTax;
+
+            // Update Target Order
+            await supabase
+                .from('orders')
+                .update({
+                    total: newFinalTotal
+                })
+                .eq('id', targetMergeOrder.id);
+
+            // Delete Source Order
+            const { error: deleteError } = await supabase
+                .from('orders')
+                .delete()
+                .eq('id', selectedOrder.id);
+
+            if (deleteError) throw deleteError;
+
+            alert('Pesanan berhasil digabung!');
+            setShowMergeModal(false);
+            setTargetMergeOrder(null);
+            setSelectedOrder(null);
+            fetchOrders();
+
+        } catch (error) {
+            console.error('Merge error:', error);
+            alert('Gagal menggabung pesanan: ' + error.message);
+        } finally {
+            setIsMerging(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div>
@@ -102,23 +363,18 @@ export default function OrdersPage() {
                 <p className="text-slate-500 dark:text-slate-400">Pantau status pesanan dapur dan kasir</p>
             </div>
 
-
-
-            {/* ... existing header ... */}
-
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {orders?.map((order) => {
                     const StatusIcon = getStatusIcon(order.status);
                     return (
                         <div key={order.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-                            {/* ... existing card header ... */}
                             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-start">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-bold text-lg text-slate-900 dark:text-white">#{order.id}</span>
-                                        <span className="text-sm text-slate-500">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        <span className="text-sm text-slate-500">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
-                                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{order.customerName}</p>
+                                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{order.customer_name}</p>
                                 </div>
                                 <span className={cn("px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5", getStatusColor(order.status))}>
                                     <StatusIcon className="w-4 h-4" />
@@ -128,21 +384,51 @@ export default function OrdersPage() {
 
                             <div className="p-4 flex-1">
                                 <div className="flex justify-between items-center text-sm font-medium">
-                                    <span className="text-slate-600 dark:text-slate-400">{order.itemCount} Item</span>
+                                    <span className="text-slate-600 dark:text-slate-400">
+                                        {order.item_count ? `${order.item_count} Item` : 'Detail Item'}
+                                    </span>
                                     <span className="text-slate-900 dark:text-white">{formatRupiah(order.total)}</span>
                                 </div>
                             </div>
 
                             <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2">
                                 {['pending', 'cooking', 'ready'].includes(order.status) && (
-                                    <button
-                                        onClick={() => handleResumeOrder(order)}
-                                        className="col-span-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                        Edit Pesanan
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => handleResumeOrder(order)}
+                                            className="col-span-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                            Edit
+                                        </button>
+                                        <div className="col-span-1 flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedOrder(order);
+                                                    setItemsToSplit(new Set());
+                                                    setSplitCustomerName('');
+                                                    setShowSplitModal(true);
+                                                }}
+                                                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                                                title="Pisah Pesanan"
+                                            >
+                                                <Share2 className="w-4 h-4 rotate-90" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedOrder(order);
+                                                    setTargetMergeOrder(null);
+                                                    setShowMergeModal(true);
+                                                }}
+                                                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                                                title="Gabung Pesanan"
+                                            >
+                                                <ArrowLeftRight className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
+
                                 {order.status === 'pending' && (
                                     <button
                                         onClick={() => updateStatus(order.id, 'cooking')}
@@ -161,24 +447,35 @@ export default function OrdersPage() {
                                 )}
                                 {order.status === 'ready' && (
                                     <button
-                                        onClick={() => handleResumeOrder(order)}
+                                        onClick={() => handleMarkAsPaid(order)}
                                         className="col-span-2 w-full py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
                                     >
                                         <Wallet className="w-4 h-4" />
-                                        Bayar di Kasir
+                                        Tandai Sudah Bayar
                                     </button>
                                 )}
-                                {order.status === 'completed' && (
-                                    <button
-                                        onClick={() => {
-                                            setSelectedOrder(order);
-                                            setShowReceipt(true);
-                                        }}
-                                        className="col-span-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <Printer className="w-4 h-4" />
-                                        Lihat Struk
-                                    </button>
+                                {(order.status === 'paid' || order.status === 'completed') && (
+                                    <>
+                                        {order.status === 'paid' && (
+                                            <button
+                                                onClick={() => updateStatus(order.id, 'completed')}
+                                                className="col-span-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                Selesai / Sudah Diambil
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => {
+                                                setSelectedOrder(order);
+                                                setShowReceipt(true);
+                                            }}
+                                            className="col-span-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Printer className="w-4 h-4" />
+                                            Lihat Struk
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -186,13 +483,10 @@ export default function OrdersPage() {
                 })}
             </div>
 
-            {/* Keeping the Receipt Modal for 'Lihat Struk' but NOT for payment anymore */}
-            {/* Payment / Receipt Modal */}
-            {/* Receipt Modal (View Only) */}
+            {/* Receipt Modal */}
             {selectedOrder && showReceipt && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                        {/* Receipt/Summary View */}
                         <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-6 flex flex-col overflow-hidden">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
@@ -221,11 +515,11 @@ export default function OrdersPage() {
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2 text-sm">
                                 <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                     <span>Subtotal</span>
-                                    <span>{formatRupiah(selectedOrder.subtotal)}</span>
+                                    <span>{formatRupiah(selectedOrder.total / 1.11)}</span>
                                 </div>
                                 <div className="flex justify-between text-slate-600 dark:text-slate-400">
                                     <span>Pajak (11%)</span>
-                                    <span>{formatRupiah(selectedOrder.tax)}</span>
+                                    <span>{formatRupiah(selectedOrder.total - (selectedOrder.total / 1.11))}</span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
                                     <span className="font-bold text-lg text-slate-900 dark:text-white">Total</span>
@@ -253,7 +547,132 @@ export default function OrdersPage() {
                     </div>
                 </div>
             )}
-        </div>
 
+            {/* Split Order Modal */}
+            {selectedOrder && showSplitModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Pisah Pesanan #{selectedOrder.id}</h3>
+                            <button onClick={() => setShowSplitModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 overflow-y-auto flex-1">
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Nama Pesanan Baru (Opsional)
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder={`Contoh: ${selectedOrder?.customer_name} (Meja 2)`}
+                                    value={splitCustomerName}
+                                    onChange={(e) => setSplitCustomerName(e.target.value)}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                />
+                            </div>
+
+                            <p className="text-sm text-slate-500 mb-4">Pilih item yang ingin dipindahkan ke pesanan baru:</p>
+                            <div className="space-y-3">
+                                {orderItems.map((item) => (
+                                    <label key={item.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={itemsToSplit.has(item.id)}
+                                            onChange={() => toggleSplitItem(item.id)}
+                                            className="mt-1 w-4 h-4 rounded text-primary border-slate-300 focus:ring-primary"
+                                        />
+                                        <div className="flex-1">
+                                            <div className="flex justify-between">
+                                                <span className="font-medium text-slate-900 dark:text-white">{item.name}</span>
+                                                <span className="text-slate-500">{formatRupiah(item.price * item.quantity)}</span>
+                                            </div>
+                                            <div className="text-xs text-slate-500 mt-1">
+                                                Quantity: {item.quantity}
+                                            </div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                            <div className="mb-4 flex justify-between items-center text-sm">
+                                <span className="text-slate-600">Total Item Dipindah:</span>
+                                <span className="font-bold text-primary">
+                                    {formatRupiah(
+                                        orderItems.filter(i => itemsToSplit.has(i.id))
+                                            .reduce((sum, i) => sum + (i.price * i.quantity), 0)
+                                    )}
+                                </span>
+                            </div>
+                            <button
+                                onClick={handleSplitOrder}
+                                disabled={isSplitting || itemsToSplit.size === 0}
+                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/25 transition-all"
+                            >
+                                {isSplitting ? 'Memproses...' : 'Proses Pisah Pesanan'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Merge Order Modal */}
+            {selectedOrder && showMergeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Gabung Pesanan #{selectedOrder.id}</h3>
+                            <button onClick={() => setShowMergeModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 overflow-y-auto flex-1">
+                            <p className="text-sm text-slate-500 mb-4">Pilih pesanan tujuan penggabungan:</p>
+                            <div className="space-y-3">
+                                {orders
+                                    .filter(o => o.id !== selectedOrder.id && ['pending', 'cooking', 'ready', 'paid'].includes(o.status))
+                                    .map((order) => (
+                                        <label key={order.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                            <input
+                                                type="radio"
+                                                name="targetOrder"
+                                                checked={targetMergeOrder?.id === order.id}
+                                                onChange={() => setTargetMergeOrder(order)}
+                                                className="w-4 h-4 text-primary border-slate-300 focus:ring-primary"
+                                            />
+                                            <div className="flex-1">
+                                                <div className="flex justify-between">
+                                                    <span className="font-medium text-slate-900 dark:text-white">#{order.id} - {order.customer_name}</span>
+                                                    <span className="text-slate-500">{formatRupiah(order.total)}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mt-1">
+                                                    Status: {order.status}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                {orders.filter(o => o.id !== selectedOrder.id && ['pending', 'cooking', 'ready', 'paid'].includes(o.status)).length === 0 && (
+                                    <p className="text-center text-slate-500 py-4">Tidak ada pesanan lain yang aktif.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                            <button
+                                onClick={handleMergeOrder}
+                                disabled={isMerging || !targetMergeOrder}
+                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/25 transition-all"
+                            >
+                                {isMerging ? 'Memproses...' : 'Proses Gabung Pesanan'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

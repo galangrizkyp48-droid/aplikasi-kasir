@@ -10,6 +10,7 @@ import ReportsPage from './features/reports/ReportsPage';
 import ProductFormPage from './features/inventory/ProductFormPage';
 import SettingsPage from './features/settings/SettingsPage';
 import ShoppingListPage from './features/shopping-list/ShoppingListPage';
+import ExpensesPage from './features/expenses/ExpensesPage';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -38,6 +39,7 @@ function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/shopping-list" element={<ShoppingListPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/products/new" element={<ProductFormPage />} />
           <Route path="/products/:id" element={<ProductFormPage />} />
         </Route>

@@ -1,23 +1,55 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
+import { useStore } from '../../lib/store';
 import { Plus, Search, Pencil, Trash2, Package } from 'lucide-react';
 import { formatRupiah, cn } from '../../lib/utils';
 
 export default function ProductListPage() {
+    const { user } = useStore();
     const [search, setSearch] = useState('');
+    const [products, setProducts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const products = useLiveQuery(
-        () => db.products
-            .filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-            .toArray(),
-        [search]
-    );
+    const fetchProducts = async () => {
+        if (!user?.storeId) return;
+        setIsLoading(true);
+
+        let query = supabase
+            .from('products')
+            .select('*')
+            .eq('store_id', user.storeId);
+
+        if (search) {
+            query = query.ilike('name', `%${search}%`);
+        }
+
+        const { data, error } = await query.order('name');
+
+        if (error) {
+            console.error('Error fetching products:', error);
+        } else {
+            setProducts(data || []);
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchProducts();
+    }, [user?.storeId, search]);
 
     const handleDelete = async (id) => {
         if (confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
-            await db.products.delete(id);
+            const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert('Gagal menghapus produk: ' + error.message);
+            } else {
+                fetchProducts();
+            }
         }
     };
 

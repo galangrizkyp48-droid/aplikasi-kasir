@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Save, Store, Receipt, Users } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -22,14 +21,25 @@ export default function SettingsPage() {
         role: 'cashier'
     });
 
-    // Fetch Employees (excluding self and strictly by storeId)
-    const employees = useLiveQuery(async () => {
-        if (!user?.storeId) return [];
-        return await db.users
-            .where('storeId')
-            .equals(user.storeId)
-            .filter(u => u.id !== user.id)
-            .toArray();
+    const [employees, setEmployees] = useState([]);
+
+    const fetchEmployees = async () => {
+        if (!user?.storeId) return;
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('store_id', user.storeId)
+            .neq('id', user.id);
+
+        if (error) {
+            console.error('Error fetching employees:', error);
+        } else {
+            setEmployees(data || []);
+        }
+    };
+
+    useEffect(() => {
+        fetchEmployees();
     }, [user?.storeId]);
 
     const handleAddEmployee = async (e) => {
@@ -39,60 +49,55 @@ export default function SettingsPage() {
             return;
         }
 
-        // Check if user has storeId
         if (!user?.storeId) {
-            alert('Error: User tidak memiliki storeId. Silakan logout dan login ulang dengan admin/admin atau daftar akun baru.');
+            alert('Error: User tidak memiliki storeId.');
             return;
         }
 
         try {
-            // Check username uniqueness
-            try {
-                const existing = await db.users.where('username').equals(newEmployee.username).count();
-                if (existing > 0) {
-                    alert('Username sudah digunakan!');
-                    return;
-                }
-            } catch (queryError) {
-                console.warn('Database query error, skipping duplicate check:', queryError);
-                // Continue anyway - will fail on add if duplicate
+            // Check username uniqueness in Supabase
+            const { data: existing } = await supabase
+                .from('users')
+                .select('username')
+                .eq('username', newEmployee.username);
+
+            if (existing && existing.length > 0) {
+                alert('Username sudah digunakan!');
+                return;
             }
 
-            // Add employee
-            await db.users.add({
+            const { error } = await supabase.from('users').insert([{
                 name: newEmployee.name,
                 username: newEmployee.username,
                 password: newEmployee.password,
                 role: newEmployee.role,
-                storeId: user.storeId,
-                pin: '123456' // Default PIN
-            });
+                store_id: user.storeId,
+                pin: '123456'
+            }]);
+
+            if (error) throw error;
 
             setNewEmployee({ name: '', username: '', password: '', role: 'cashier' });
-            alert('Karyawan berhasil ditambahkan! Username: ' + newEmployee.username);
+            alert('Karyawan berhasil ditambahkan!');
+            fetchEmployees();
         } catch (error) {
-            console.error('Add employee error:', error);
-
-            if (error.name === 'ConstraintError') {
-                alert('Username sudah digunakan!');
-            } else if (error.message && error.message.includes('storeId')) {
-                alert('Error database: Schema lama terdeteksi.\n\nSolusi:\n1. Clear browser data (F12 → Application → Clear storage)\n2. Refresh halaman\n3. Login dengan admin/admin\n4. Coba tambah karyawan lagi');
-            } else {
-                alert('Gagal menambahkan karyawan: ' + error.message + '\n\nTip: Coba clear browser data atau daftar akun bisnis baru.');
-            }
+            alert('Gagal menambahkan karyawan: ' + error.message);
         }
     };
 
     useEffect(() => {
         const loadSettings = async () => {
-            const keys = ['storeName', 'storeAddress', 'storePhone', 'receiptFooter', 'printReceipt', 'taxRate'];
-            const loaded = {};
+            if (!user?.storeId) return;
+            const { data } = await supabase
+                .from('settings')
+                .select('*')
+                .eq('store_id', user.storeId);
 
-            if (user?.storeId) {
-                for (const key of keys) {
-                    const item = await db.settings.where('[storeId+key]').equals([user.storeId, key]).first();
-                    if (item) loaded[key] = item.value;
-                }
+            if (data) {
+                const loaded = {};
+                data.forEach(item => {
+                    loaded[item.key] = item.value;
+                });
                 if (loaded.taxRate !== undefined) loaded.taxRate = Number(loaded.taxRate);
                 setSettings(prev => ({ ...prev, ...loaded }));
             }
@@ -103,16 +108,17 @@ export default function SettingsPage() {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
-            await db.transaction('rw', db.settings, async () => {
-                for (const [key, value] of Object.entries(settings)) {
-                    const existing = await db.settings.where('[storeId+key]').equals([user.storeId, key]).first();
-                    if (existing) {
-                        await db.settings.update(existing.id, { value });
-                    } else {
-                        await db.settings.add({ key, value, storeId: user.storeId });
-                    }
-                }
-            });
+            const upsertData = Object.entries(settings).map(([key, value]) => ({
+                store_id: user.storeId,
+                key,
+                value: String(value)
+            }));
+
+            const { error } = await supabase
+                .from('settings')
+                .upsert(upsertData, { onConflict: 'store_id,key' });
+
+            if (error) throw error;
             alert('Pengaturan berhasil disimpan!');
         } catch (error) {
             alert('Gagal menyimpan pengaturan: ' + error.message);

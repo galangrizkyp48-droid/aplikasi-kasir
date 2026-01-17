@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { formatRupiah, cn } from '../../lib/utils';
 import { Plus, Save, Trash2, ShoppingCart, Search, Package, ArrowRight, Minus } from 'lucide-react';
@@ -13,58 +12,99 @@ export default function ShoppingListPage() {
     const [newItemPrice, setNewItemPrice] = useState('');
     const [showAddItem, setShowAddItem] = useState(false);
 
-    // 1. Fetch Today's Active Shopping List (or create one)
-    const todayList = useLiveQuery(async () => {
-        if (!user?.storeId) return null;
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
+    const [todayList, setTodayList] = useState(null);
+    const [catalogItems, setCatalogItems] = useState([]);
 
-        return await db.shoppingLists
-            .where('date')
-            .between(startOfDay, endOfDay, true, true)
-            .filter(list => list.status === 'active' && list.storeId === user.storeId)
-            .first();
-    }, [user?.storeId]);
+    const fetchTodayList = async () => {
+        if (!user?.storeId) return;
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+            .from('shopping_lists')
+            .select('*')
+            .eq('store_id', user.storeId)
+            .eq('date', today)
+            .eq('status', 'active')
+            .single();
 
-    // 2. Fetch Catalog Items
-    const catalogItems = useLiveQuery(() => {
-        if (!user?.storeId) return [];
-        let collection = db.shoppingItems.where('storeId').equals(user.storeId);
+        if (data) setTodayList(data);
+        else setTodayList(null);
+    };
+
+    const fetchCatalog = async () => {
+        if (!user?.storeId) return;
+        let query = supabase
+            .from('shopping_items')
+            .select('*')
+            .eq('store_id', user.storeId);
+
         if (search) {
-            collection = collection.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+            query = query.ilike('name', `%${search}%`);
         }
-        return collection.reverse().toArray();
-    }, [search, user?.storeId]);
+
+        const { data } = await query.order('name');
+        if (data) setCatalogItems(data);
+    };
+
+    useEffect(() => {
+        fetchTodayList();
+        fetchCatalog();
+    }, [user?.storeId, search]);
 
     // Actions
     const addToCart = async (item) => {
+        const itemToAdd = { ...item, quantity: 1, checked: false };
+
         if (!todayList) {
-            // Create list first if doesn't exist
             const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-            await db.shoppingLists.add({
-                title: `Belanja ${dateStr}`,
-                date: new Date(),
-                status: 'active',
-                items: [{ ...item, quantity: 1 }],
-                totalEstimated: item.price,
-                storeId: user.storeId
-            });
+            const today = new Date().toISOString().split('T')[0];
+
+            console.log('Creating new shopping list for:', today);
+
+            const { data, error } = await supabase
+                .from('shopping_lists')
+                .insert([{
+                    title: `Belanja ${dateStr}`,
+                    date: today,
+                    status: 'active',
+                    items: [itemToAdd],
+                    total_estimated: item.price,
+                    store_id: user.storeId
+                }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating list:', error);
+                alert('Gagal buat list: ' + error.message + ' (' + error.details + ')');
+            } else {
+                fetchTodayList();
+            }
         } else {
-            // Update existing list
+            console.log('Updating existing list:', todayList.id);
             const existingItem = todayList.items.find(i => i.id === item.id);
             let newItems;
+
             if (existingItem) {
                 newItems = todayList.items.map(i =>
                     i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
                 );
             } else {
-                newItems = [...todayList.items, { ...item, quantity: 1 }];
+                newItems = [...todayList.items, itemToAdd];
             }
 
             const newTotal = newItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-            await db.shoppingLists.update(todayList.id, { items: newItems, totalEstimated: newTotal });
+
+            const { error } = await supabase
+                .from('shopping_lists')
+                .update({ items: newItems, total_estimated: newTotal })
+                .eq('id', todayList.id);
+
+            if (error) {
+                console.error('Error updating list:', error);
+                alert('Gagal update list: ' + error.message);
+            } else {
+                fetchTodayList();
+            }
         }
     };
 
@@ -77,14 +117,37 @@ export default function ShoppingListPage() {
         });
 
         const newTotal = newItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-        await db.shoppingLists.update(todayList.id, { items: newItems, totalEstimated: newTotal });
+        await supabase
+            .from('shopping_lists')
+            .update({ items: newItems, total_estimated: newTotal })
+            .eq('id', todayList.id);
+        fetchTodayList();
+    };
+
+    const toggleItemCheck = async (itemId) => {
+        if (!todayList) return;
+
+        const newItems = todayList.items.map(i => {
+            if (i.id === itemId) return { ...i, checked: !i.checked };
+            return i;
+        });
+
+        await supabase
+            .from('shopping_lists')
+            .update({ items: newItems })
+            .eq('id', todayList.id);
+        fetchTodayList();
     };
 
     const removeFromCart = async (itemId) => {
         if (!todayList) return;
         const newItems = todayList.items.filter(i => i.id !== itemId);
         const newTotal = newItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-        await db.shoppingLists.update(todayList.id, { items: newItems, totalEstimated: newTotal });
+        await supabase
+            .from('shopping_lists')
+            .update({ items: newItems, total_estimated: newTotal })
+            .eq('id', todayList.id);
+        fetchTodayList();
     };
 
     const addNewCatalogItem = async (e) => {
@@ -92,16 +155,19 @@ export default function ShoppingListPage() {
         if (!newItemName || !newItemPrice) return;
 
         try {
-            await db.shoppingItems.add({
+            const { error } = await supabase.from('shopping_items').insert([{
                 name: newItemName,
                 price: Number(newItemPrice),
                 unit: 'pcs',
-                storeId: user.storeId
-            });
+                store_id: user.storeId
+            }]);
+
+            if (error) throw error;
             setNewItemName('');
             setNewItemPrice('');
             setShowAddItem(false);
             alert('Item berhasil ditambahkan ke katalog!');
+            fetchCatalog();
         } catch (error) {
             alert('Gagal tambah item: ' + error.message);
         }
@@ -109,8 +175,10 @@ export default function ShoppingListPage() {
 
     const deleteCatalogItem = async (id, e) => {
         e.stopPropagation();
-        if (window.confirm('Hapus item ini dari katalog? (Tidak akan menghapus dari list hari ini)')) {
-            await db.shoppingItems.delete(id);
+        if (window.confirm('Hapus item ini dari katalog?')) {
+            const { error } = await supabase.from('shopping_items').delete().eq('id', id);
+            if (error) alert('Gagal hapus: ' + error.message);
+            else fetchCatalog();
         }
     };
 
@@ -206,7 +274,7 @@ export default function ShoppingListPage() {
                         List Belanja Hari Ini
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Total Estimasi: <span className="font-bold text-slate-900 dark:text-white">{formatRupiah(todayList?.totalEstimated || 0)}</span>
+                        Total Estimasi: <span className="font-bold text-slate-900 dark:text-white">{formatRupiah(todayList?.total_estimated || 0)}</span>
                     </p>
                 </div>
 
@@ -218,12 +286,24 @@ export default function ShoppingListPage() {
                         </div>
                     ) : (
                         todayList.items.map(item => (
-                            <div key={item.id} className="flex gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                            <div
+                                key={item.id}
+                                className={cn(
+                                    "flex gap-3 p-3 rounded-xl border transition-colors cursor-pointer",
+                                    item.checked
+                                        ? "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-900/30 opacity-75"
+                                        : "bg-slate-50 border-transparent hover:border-slate-200 dark:bg-slate-800/50 dark:hover:border-slate-700"
+                                )}
+                                onClick={() => toggleItemCheck(item.id)}
+                            >
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="font-semibold text-sm text-slate-900 dark:text-white truncate">{item.name}</h4>
+                                    <h4 className={cn(
+                                        "font-semibold text-sm truncate transition-all",
+                                        item.checked ? "text-slate-500 line-through decoration-slate-400" : "text-slate-900 dark:text-white"
+                                    )}>{item.name}</h4>
                                     <p className="text-xs text-slate-500">{formatRupiah(item.price)} / pcs</p>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                     <button
                                         onClick={() => updateQuantity(item.id, -1)}
                                         className="w-6 h-6 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-100"

@@ -289,9 +289,9 @@ export default function POSPage() {
 
     return (
         <>
-            <div className="flex h-[calc(100vh-theme(spacing.32))] gap-6">
+            <div className="block md:flex md:flex-row h-auto md:h-[calc(100vh-theme(spacing.32))] gap-6">
                 {/* Product Grid (Left) */}
-                <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="w-full md:flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px] md:min-h-0 mb-6 md:mb-0">
                     {/* Filter Header */}
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
                         <div className="relative">
@@ -335,7 +335,7 @@ export default function POSPage() {
 
                     {/* Grid Content */}
                     <div className="flex-1 overflow-y-auto p-4">
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 min-h-0 overflow-auto">
                             {products?.map(product => {
                                 const isUnlimited = product.stock === -1;
                                 const isOutOfStock = !isUnlimited && product.stock <= 0;
@@ -367,11 +367,11 @@ export default function POSPage() {
                 </div>
 
                 {/* Cart Sidebar (Right) */}
-                <div className="w-96 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="w-full md:w-96 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden h-auto md:h-auto">
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <h2 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5 text-primary" />
-                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'}
+                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'} <span className="text-xs text-slate-400 ml-2">(v1.2)</span>
                         </h2>
                         <button
                             onClick={handleClearCart}

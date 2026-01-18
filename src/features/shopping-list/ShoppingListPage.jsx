@@ -5,7 +5,7 @@ import { formatRupiah, cn } from '../../lib/utils';
 import { Plus, Save, Trash2, ShoppingCart, Search, Package, ArrowRight, Minus } from 'lucide-react';
 
 export default function ShoppingListPage() {
-    const { user } = useStore();
+    const { user, shiftId } = useStore();
     // State
     const [search, setSearch] = useState('');
     const [newItemName, setNewItemName] = useState('');
@@ -16,13 +16,12 @@ export default function ShoppingListPage() {
     const [catalogItems, setCatalogItems] = useState([]);
 
     const fetchTodayList = async () => {
-        if (!user?.storeId) return;
-        const today = new Date().toISOString().split('T')[0];
+        if (!user?.storeId || !shiftId) return;
         const { data, error } = await supabase
             .from('shopping_lists')
             .select('*')
             .eq('store_id', user.storeId)
-            .eq('date', today)
+            .eq('shift_id', shiftId)
             .eq('status', 'active')
             .single();
 
@@ -48,23 +47,24 @@ export default function ShoppingListPage() {
     useEffect(() => {
         fetchTodayList();
         fetchCatalog();
-    }, [user?.storeId, search]);
+    }, [user?.storeId, shiftId, search]);
 
     // Actions
     const addToCart = async (item) => {
         const itemToAdd = { ...item, quantity: 1, checked: false };
 
         if (!todayList) {
-            const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
             const today = new Date().toISOString().split('T')[0];
+            const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-            console.log('Creating new shopping list for:', today);
+            console.log('Creating new shopping list for shift:', shiftId);
 
             const { data, error } = await supabase
                 .from('shopping_lists')
                 .insert([{
-                    title: `Belanja ${dateStr}`,
+                    title: `Belanja Shift ${timeStr}`,
                     date: today,
+                    shift_id: shiftId,
                     status: 'active',
                     items: [itemToAdd],
                     total_estimated: item.price,

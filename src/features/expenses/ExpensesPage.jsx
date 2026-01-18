@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { formatRupiah, cn } from '../../lib/utils';
-import { Plus, Trash2, Wallet, Calendar, ArrowUpRight } from 'lucide-react';
+import { Plus, Trash2, Wallet, ArrowUpRight } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
 
 export default function ExpensesPage() {
@@ -14,22 +14,18 @@ export default function ExpensesPage() {
     // Form State for adding new expense
     const [newExpense, setNewExpense] = useState({
         title: '',
-        amount: '',
-        date: new Date().toISOString().split('T')[0]
+        amount: ''
     });
 
-    // State for filtering expenses by date
-    const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
-
     const fetchExpenses = async () => {
-        if (!user?.storeId) return;
+        if (!user?.storeId || !shiftId) return;
         setIsLoading(true);
         try {
             const { data, error } = await supabase
                 .from('expenses')
                 .select('*')
                 .eq('store_id', user.storeId)
-                .eq('date', filterDate) // Filter by the selected date
+                .eq('shift_id', shiftId) // Filter by current shift
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -43,7 +39,7 @@ export default function ExpensesPage() {
 
     useEffect(() => {
         fetchExpenses();
-    }, [user?.storeId, filterDate]); // Re-fetch when storeId or filterDate changes
+    }, [user?.storeId, shiftId]); // Re-fetch when storeId or shiftId changes
 
     const handleAddExpense = async (e) => {
         e.preventDefault();
@@ -53,9 +49,9 @@ export default function ExpensesPage() {
             const { error } = await supabase.from('expenses').insert([{
                 title: newExpense.title,
                 amount: Number(newExpense.amount),
-                date: newExpense.date,
+                date: new Date().toISOString().split('T')[0],
                 store_id: user.storeId,
-                shift_id: shiftId || null // Link to current shift if active
+                shift_id: shiftId || null
             }]);
 
             if (error) throw error;
@@ -63,13 +59,9 @@ export default function ExpensesPage() {
             alert('Pengeluaran berhasil dicatat');
             setNewExpense({
                 title: '',
-                amount: '',
-                date: new Date().toISOString().split('T')[0]
+                amount: ''
             });
-            // If the added expense's date matches the current filter date, re-fetch
-            if (newExpense.date === filterDate) {
-                fetchExpenses();
-            }
+            fetchExpenses();
         } catch (error) {
             alert('Gagal menambah pengeluaran: ' + error.message);
         }
@@ -90,18 +82,10 @@ export default function ExpensesPage() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Catatan Pengeluaran</h1>
-                        <p className="text-slate-500 dark:text-slate-400">Catat biaya operasional harian untuk kalkulasi profit</p>
-                    </div>
-                    <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <Calendar className="w-5 h-5 text-slate-500 ml-2" />
-                        <input
-                            type="date"
-                            value={filterDate}
-                            onChange={(e) => setFilterDate(e.target.value)}
-                            className="bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-300 font-bold"
-                        />
+                        <p className="text-slate-500 dark:text-slate-400">Catat biaya operasional untuk shift aktif</p>
                     </div>
                 </div>
+
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Form */}
@@ -152,7 +136,7 @@ export default function ExpensesPage() {
                                 <Wallet className="w-8 h-8" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-slate-500">Total Pengeluaran ({filterDate ? new Date(filterDate).toLocaleDateString() : '-'})</p>
+                                <p className="text-sm font-medium text-slate-500">Total Pengeluaran (Shift Aktif)</p>
                                 <h3 className="text-3xl font-bold text-slate-900 dark:text-white">{formatRupiah(totalExpenses)}</h3>
                             </div>
                         </div>
@@ -165,7 +149,7 @@ export default function ExpensesPage() {
                             <div className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {expenses.length === 0 ? (
                                     <div className="p-8 text-center text-slate-400 text-sm">
-                                        Belum ada catatan pengeluaran hari ini.
+                                        Belum ada catatan pengeluaran di shift ini.
                                     </div>
                                 ) : (
                                     expenses.map(item => (

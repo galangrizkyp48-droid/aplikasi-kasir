@@ -21,6 +21,7 @@ export default function LoginPage() {
     });
 
     const navigate = useNavigate();
+    const setUser = useStore((state) => state.setUser);
     const saveUserCredential = useStore((state) => state.saveUserCredential);
     const verifyOfflineLogin = useStore((state) => state.verifyOfflineLogin);
 

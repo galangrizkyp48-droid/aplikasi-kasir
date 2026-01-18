@@ -3,8 +3,6 @@ import { useStore } from '../../lib/store';
 import { SUBSCRIPTION_PLANS, MOCK_PAYMENT_GATEWAY, upgradeUserToPro } from './subscription';
 import { Crown, CheckCircle2, ShieldCheck, Loader2, CreditCard } from 'lucide-react';
 import { formatRupiah } from '../../lib/utils';
-import { format } from 'date-fns';
-import { id as localeId } from 'date-fns/locale';
 
 export default function SubscriptionPage() {
     const { user, setUser } = useStore();
@@ -73,7 +71,7 @@ export default function SubscriptionPage() {
                         </h2>
                         {isPro && subEndDate && (
                             <p className="mt-2 text-slate-300">
-                                Berakhir pada: {format(subEndDate, 'dd MMMM yyyy', { locale: localeId })}
+                                Berakhir pada: {subEndDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </p>
                         )}
                         {!isPro && (

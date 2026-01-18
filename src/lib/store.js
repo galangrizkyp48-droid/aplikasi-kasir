@@ -100,6 +100,8 @@ export const useStore = create(
             // UI State
             isLoading: false,
             setLoading: (isLoading) => set({ isLoading }),
+            _hasHydrated: false,
+            setHasHydrated: (state) => set({ _hasHydrated: state }),
 
             // Global Checkout Modal State
             isCheckoutModalOpen: false,
@@ -137,6 +139,9 @@ export const useStore = create(
                 offlineQueue: state.offlineQueue,
                 savedUsers: state.savedUsers // Persist offline credentials
             }), // Only persist these fields
+            onRehydrateStorage: () => (state) => {
+                state.setHasHydrated(true);
+            },
         }
     )
 );

@@ -192,6 +192,13 @@ export default function DashboardLayout() {
 
             // CRITICAL: Check for open shift
             try {
+                // CRITICAL FIX: Wait for hydration before checking shift
+                const hasHydrated = useStore.getState()._hasHydrated;
+                if (!hasHydrated) {
+                    console.log('Store not hydrated yet. Waiting...');
+                    return; // EXIT early, do not show modal yet
+                }
+
                 // CRITICAL FIX: Use getState() to access the most current value even if not in dependencies
                 const currentShiftId = useStore.getState().shiftId;
                 console.log('Validating shift. Current state:', currentShiftId);
@@ -247,6 +254,14 @@ export default function DashboardLayout() {
             }
         };
         loadInitial();
+        // Add hydration listener
+        const hasHydrated = useStore.getState()._hasHydrated;
+        if (!hasHydrated) {
+            const unsub = useStore.subscribe((state) => state._hasHydrated, (hydrated) => {
+                if (hydrated) loadInitial();
+            });
+            return () => unsub();
+        }
     }, [user?.storeId, isOffline]); // REMOVED shiftId to prevent race condition loop
 
     const handleLogout = () => {

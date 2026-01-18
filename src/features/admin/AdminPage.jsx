@@ -16,10 +16,62 @@ export default function AdminPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [announcements, setAnnouncements] = useState([]);
+    const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info' });
+
     useEffect(() => {
         fetchUsers();
         fetchStats();
+        fetchAnnouncements();
     }, []);
+
+    const fetchAnnouncements = async () => {
+        const { data } = await supabase
+            .from('system_announcements')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (data) setAnnouncements(data);
+    };
+
+    const handleCreateAnnouncement = async (e) => {
+        e.preventDefault();
+        try {
+            const { error } = await supabase
+                .from('system_announcements')
+                .insert([{
+                    title: newAnnouncement.title,
+                    message: newAnnouncement.message,
+                    type: newAnnouncement.type,
+                    created_by: user?.username || 'Admin',
+                    is_active: true,
+                    created_at: new Date().toISOString()
+                }]);
+
+            if (error) throw error;
+
+            setNewAnnouncement({ title: '', message: '', type: 'info' });
+            fetchAnnouncements();
+            alert('Pengumuman berhasil dibuat!');
+        } catch (error) {
+            alert('Gagal membuat pengumuman: ' + error.message);
+        }
+    };
+
+    const handleDeleteAnnouncement = async (id) => {
+        if (!confirm('Hapus pengumuman ini?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('system_announcements')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchAnnouncements();
+        } catch (error) {
+            alert('Gagal menghapus: ' + error.message);
+        }
+    };
 
     const fetchUsers = async () => {
         setIsLoading(true);
@@ -224,8 +276,8 @@ export default function AdminPage() {
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className={`px-2 py-0.5 text-xs font-bold uppercase rounded ${ann.type === 'critical' ? 'bg-red-100 text-red-700' :
-                                                ann.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
-                                                    'bg-blue-100 text-blue-700'
+                                            ann.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                                                'bg-blue-100 text-blue-700'
                                             }`}>{ann.type}</span>
                                         <h4 className="font-bold text-slate-900 dark:text-white">{ann.title}</h4>
                                     </div>

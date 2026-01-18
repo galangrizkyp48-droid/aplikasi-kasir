@@ -53,6 +53,12 @@ export default function ShoppingListPage() {
     const addToCart = async (item) => {
         const itemToAdd = { ...item, quantity: 1, checked: false };
 
+        // Ensure a shift is active before adding items
+        if (!shiftId) {
+            alert('Shift belum dimulai. Silakan mulai shift terlebih dahulu.');
+            return;
+        }
+
         if (!todayList) {
             const today = new Date().toISOString().split('T')[0];
             const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -80,6 +86,11 @@ export default function ShoppingListPage() {
                 fetchTodayList();
             }
         } else {
+            // Update existing list; ensure shiftId is still valid
+            if (!shiftId) {
+                alert('Shift belum dimulai. Tidak dapat memperbarui daftar belanja.');
+                return;
+            }
             console.log('Updating existing list:', todayList.id);
             const existingItem = todayList.items.find(i => i.id === item.id);
             let newItems;

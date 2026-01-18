@@ -31,7 +31,8 @@ export default function POSPage() {
         setShiftId, shiftId, user,
         currentOrderId, setCurrentOrderId, updateQuantity,
         currentCustomerName, setCustomerNameStore,
-        isCheckoutModalOpen, openCheckoutModal, closeCheckoutModal // Added global state
+        isCheckoutModalOpen, openCheckoutModal, closeCheckoutModal, // Added global state
+        addToQueue // Import addToQueue
     } = useStore();
 
     const setStoreCustomerName = useStore(state => state.setCustomerName);
@@ -155,11 +156,74 @@ export default function POSPage() {
         }
     };
 
+
+
+    // ...
+
     const processOrder = async (status) => {
         try {
+            // OFFLINE HANDLING
+            if (!navigator.onLine) {
+                if (status === 'save') {
+                    alert('Fitur "Simpan" hanya tersedia saat online.');
+                    return;
+                }
+
+                const finalStatus = status === 'pay' ? 'paid' : (status === 'hold' ? 'cooking' : status);
+                const finalCustomerName = customerName.trim() || (finalStatus === 'paid' ? 'Walk-in Customer' : 'Table Order');
+
+                // Generate Local ID
+                const offlineOrderId = `OFFLINE-${Date.now()}`;
+
+                const offlineOrderData = {
+                    id: offlineOrderId,
+                    status: finalStatus,
+                    total,
+                    customer_name: finalCustomerName,
+                    shift_id: shiftId || 'offline_shift',
+                    store_id: user.storeId,
+                    created_at: new Date().toISOString(),
+                    items: cart.map(item => ({
+                        product_id: item.id,
+                        name: item.name,
+                        price: item.price,
+                        quantity: item.quantity
+                    })),
+                    payment: finalStatus === 'paid' ? {
+                        payment_method: paymentMethod,
+                        amount: total
+                    } : null
+                };
+
+                // Add to Retry Queue
+                addToQueue({
+                    type: 'ORDER',
+                    data: offlineOrderData,
+                    id: offlineOrderId
+                });
+
+                // Optimistic Local Stock Update (Optional: could handle via separate store slice, but for now just clear cart)
+                // Note: We don't update local product list stock here because it might get out of sync. 
+                // We rely on the concept that offline = optimistic.
+
+                setLastOrderId(offlineOrderId);
+                setIsPaymentSuccess(true);
+                if (status !== 'pay') {
+                    clearCart();
+                    setCurrentOrderId(null);
+                    closeCheckoutModal();
+                    setCustomerName('');
+                    alert('Mode Offline: Pesanan disimpan di antrian & akan diupload saat online.');
+                    navigate('/orders');
+                }
+                return;
+            }
+
+            // ONLINE HANDLING
             let finalStatus = status;
             if (status === 'pay') finalStatus = 'paid'; // Changed from 'completed' to 'paid' to keep it in orders list
             else if (status === 'hold') finalStatus = 'cooking';
+            // ... (rest of online logic)
 
             let currentShiftId = shiftId;
             if (!currentShiftId) {

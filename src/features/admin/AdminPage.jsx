@@ -73,6 +73,50 @@ export default function AdminPage() {
         }
     };
 
+    const handleToggleSuspend = async (userId, currentStatus) => {
+        if (!confirm(currentStatus ? 'Aktifkan kembali user ini?' : 'Suspend user ini?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ is_suspended: !currentStatus })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            // Optimistic update
+            setUsers(users.map(u =>
+                u.id === userId ? { ...u, is_suspended: !currentStatus } : u
+            ));
+
+            alert(`User berhasil di-${currentStatus ? 'aktifkan' : 'suspend'}`);
+        } catch (error) {
+            alert('Gagal mengubah status: ' + error.message);
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        if (!confirm('Yakin ingin menghapus PERMANEN user ini? Data toko akan hilang!')) return;
+
+        // Double confirmation for safety
+        const confirmName = prompt('Ketik "DELETE" untuk konfirmasi penghapusan:');
+        if (confirmName !== 'DELETE') return;
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            setUsers(users.filter(u => u.id !== userId));
+            alert('User berhasil dihapus');
+        } catch (error) {
+            alert('Gagal menghapus user: ' + error.message);
+        }
+    };
+
     const fetchUsers = async () => {
         setIsLoading(true);
         const { data, error } = await supabase
@@ -324,6 +368,7 @@ export default function AdminPage() {
                                 <th className="px-6 py-4 font-medium">Role</th>
                                 <th className="px-6 py-4 font-medium">Store ID</th>
                                 <th className="px-6 py-4 font-medium">Plan</th>
+                                <th className="px-6 py-4 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -341,7 +386,7 @@ export default function AdminPage() {
                                 </tr>
                             ) : (
                                 filteredUsers.map((u) => (
-                                    <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                    <tr key={u.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 ${u.is_suspended ? 'opacity-50 grayscale' : ''}`}>
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
                                             {u.username}
                                         </td>
@@ -363,6 +408,26 @@ export default function AdminPage() {
                                             <span className={`px-2 py-1 rounded text-xs font-bold ${u.plan_type === 'pro' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
                                                 {u.plan_type?.toUpperCase() || 'FREE'}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleToggleSuspend(u.id, u.is_suspended)}
+                                                    className={`px-3 py-1 text-xs font-bold rounded-lg border ${u.is_suspended
+                                                        ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                                                        : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                                                        }`}
+                                                >
+                                                    {u.is_suspended ? 'Aktifkan' : 'Suspend'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteUser(u.id)}
+                                                    className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
+                                                    title="Hapus Permanen"
+                                                >
+                                                    <Shield className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

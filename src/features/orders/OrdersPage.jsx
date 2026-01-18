@@ -47,13 +47,21 @@ export default function OrdersPage() {
             console.log('Orders fetched:', data?.length);
 
             // Merge with offline queue
+            // Merge with offline queue
             const offlineOrders = offlineQueue
-                .filter(item => item.type === 'ORDER' && item.data.shift_id === (shiftId || 'offline_shift')) // Simplification
+                .filter(item => item.type === 'ORDER')
+                .filter(item => {
+                    // Be permissive: show if same shift, OR if it's an offline shift and we are strictly offline
+                    return item.data.shift_id === shiftId ||
+                        item.data.shift_id === 'offline_shift' ||
+                        (String(item.data.shift_id).startsWith('offline_') && shiftId && String(shiftId).startsWith('offline_'));
+                })
                 .map(item => ({
                     ...item.data,
                     id: item.id, // Use the temp ID
                     created_at: item.data.created_at,
-                    is_offline: true
+                    is_offline: true,
+                    status: item.data.status // Ensure status is preserved
                 }));
 
             // Combine and sort

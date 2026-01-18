@@ -354,6 +354,47 @@ ${shoppingDetails}
         window.print(); // Checking if simple print is enough for "Download" requirement as PDF
     };
 
+    // End shift WITHOUT WhatsApp report
+    const confirmEndWorkWithoutReport = async () => {
+        if (!endWorkStats || !shiftId) return;
+
+        try {
+            // Close all active shopping lists for today
+            const today = new Date().toISOString().split('T')[0];
+            await supabase
+                .from('shopping_lists')
+                .update({ status: 'closed' })
+                .eq('store_id', user.storeId)
+                .eq('date', today)
+                .eq('status', 'active');
+
+            // Close Shift
+            const { error } = await supabase
+                .from('shifts')
+                .update({
+                    end_time: new Date(),
+                    status: 'closed',
+                    total_sales: endWorkStats.totalSales,
+                    end_cash: endWorkStats.expectedCash
+                })
+                .eq('id', shiftId);
+
+            if (error) throw error;
+
+            // Cleanup & Reset for Next Shift
+            setShiftId(null);
+            setShowEndShiftModal(false);
+            setStartCash('');
+            useStore.getState().clearCart();
+            setShowStartWorkModal(true);
+
+            alert('Shift selesai! Silakan mulai shift baru.');
+
+        } catch (error) {
+            alert('Gagal menutup pekerjaan: ' + error.message);
+        }
+    };
+
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
         { icon: ShoppingCart, label: 'Kasir', href: '/pos' },
@@ -560,13 +601,22 @@ ${shoppingDetails}
                                 </button>
                             </div>
 
-                            <button
-                                onClick={confirmEndWork}
-                                className="w-full px-4 py-4 font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 flex items-center justify-center gap-2"
-                            >
-                                <span className="material-symbols-outlined">send</span>
-                                Selesai & Kirim Laporan
-                            </button>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={confirmEndWorkWithoutReport}
+                                    className="w-full px-4 py-4 font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined">check_circle</span>
+                                    Selesai Tanpa Laporan
+                                </button>
+                                <button
+                                    onClick={confirmEndWork}
+                                    className="w-full px-4 py-4 font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 flex items-center justify-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined">send</span>
+                                    Selesai & Kirim Laporan
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

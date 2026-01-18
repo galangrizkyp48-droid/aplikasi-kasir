@@ -58,27 +58,9 @@ export default function POSPage() {
         }
     }, [isCheckoutModalOpen]);
 
-    // Check for active shift logic
-    useEffect(() => {
-        const checkShift = async () => {
-            if (!user?.storeId) return;
-            const { data: activeShift } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('store_id', user.storeId)
-                .eq('status', 'open')
-                .single();
 
-            if (activeShift) {
-                setShiftId(activeShift.id);
-                setIsShiftOpen(true);
-            } else {
-                setShiftId(null);
-                setIsShiftOpen(false);
-            }
-        };
-        checkShift();
-    }, [shiftId, user?.storeId]);
+    // Shift validation is handled globally in DashboardLayout.jsx
+    // Removed duplicate logic here to prevent shiftId from being cleared
 
 
 

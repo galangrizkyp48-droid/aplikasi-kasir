@@ -225,10 +225,15 @@ export default function DashboardLayout() {
                 const openShift = openShifts?.[0];
 
                 if (error && error.code !== 'PGRST116') {
-                    // Network error or other non-404 error
-                    console.warn('Network error checking shift, using local validation.');
+                    // Network error or other non-404 error (e.g., 400, 406)
+                    console.warn('Network error checking shift:', error);
                     if (currentShiftId) {
+                        // We have a local shift, trust it
                         setShowStartWorkModal(false);
+                    } else {
+                        // No local shift and server failed - show modal to let user start
+                        console.log('No local shift and server error. Showing modal.');
+                        setShowStartWorkModal(true);
                     }
                     return;
                 }
@@ -253,7 +258,13 @@ export default function DashboardLayout() {
             } catch (err) {
                 console.warn('Shift check failed (likely network):', err);
                 const currentShiftId = useStore.getState().shiftId;
-                if (currentShiftId) setShowStartWorkModal(false);
+                if (currentShiftId) {
+                    setShowStartWorkModal(false);
+                } else {
+                    // No local shift and query crashed - show modal
+                    console.log('Query crashed and no local shift. Showing modal.');
+                    setShowStartWorkModal(true);
+                }
             }
         };
         loadInitial();

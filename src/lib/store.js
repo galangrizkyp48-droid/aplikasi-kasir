@@ -8,6 +8,10 @@ export const useStore = create(
             user: null, // { id, username, role, name, storeId }
             setUser: (user) => set({ user }),
             logout: () => set({ user: null, shiftId: null, cart: [], currentOrderId: null }),
+            isSuperAdmin: () => {
+                const state = useStore.getState();
+                return state.user?.username === 'galang'; // Super admin username
+            },
 
             // Shift State
             shiftId: null,

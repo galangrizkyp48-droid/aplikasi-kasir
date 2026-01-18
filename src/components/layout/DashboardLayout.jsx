@@ -22,7 +22,8 @@ import {
     Minus,
     CreditCard,
     ChefHat,
-    User
+    User,
+    Shield
 } from 'lucide-react';
 import { useOrderProcessing } from '../../hooks/useOrderProcessing';
 
@@ -331,15 +332,18 @@ ${shoppingDetails}
             const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
 
-            // Cleanup & Logout
+            // Cleanup & Reset for Next Shift
             setShiftId(null);
             setShowEndShiftModal(false);
+            setStartCash(''); // Reset start cash input
 
-            // Clear POS Cart (Imported from store)
+            // Clear POS Cart
             useStore.getState().clearCart();
 
-            logout(); // Clear user state
-            navigate('/login'); // Go to login
+            // Show Start Work Modal for next shift
+            setShowStartWorkModal(true);
+
+            alert('Shift selesai! Silakan mulai shift baru.');
 
         } catch (error) {
             alert('Gagal menutup pekerjaan: ' + error.message);
@@ -360,6 +364,12 @@ ${shoppingDetails}
         { icon: FileText, label: 'Laporan', href: '/reports' },
         { icon: Settings, label: 'Pengaturan', href: '/settings' },
     ];
+
+    // Add admin menu for super admin only
+    const isSuperAdmin = useStore.getState().isSuperAdmin();
+    if (isSuperAdmin) {
+        navItems.push({ icon: Shield, label: 'Admin', href: '/admin' });
+    }
 
     return (
         <div className="min-h-screen bg-background-light dark:bg-background-dark flex">

@@ -132,13 +132,13 @@ export default function POSPage() {
 
     // Reset payment state when modal opens
     useEffect(() => {
-        if (showCheckoutModal) {
+        if (isCheckoutModalOpen) {
             setPaymentMethod('cash');
             setCashReceived('');
             setIsPaymentSuccess(false);
             setLastOrderId(null);
         }
-    }, [showCheckoutModal]);
+    }, [isCheckoutModalOpen]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const taxRate = settings?.taxRate ?? 11;
@@ -271,7 +271,7 @@ export default function POSPage() {
             } else {
                 clearCart();
                 setCurrentOrderId(null);
-                setShowCheckoutModal(false);
+                closeCheckoutModal();
                 setCustomerName('');
                 alert('Pesanan Disimpan! Masuk ke daftar pesanan.');
                 navigate('/orders');
@@ -284,7 +284,7 @@ export default function POSPage() {
     const handleCloseSuccess = () => {
         clearCart();
         setCurrentOrderId(null);
-        setShowCheckoutModal(false);
+        closeCheckoutModal();
         setCustomerName('');
     };
 
@@ -392,7 +392,7 @@ export default function POSPage() {
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <h2 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5 text-primary" />
-                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'} <span className="text-xs text-slate-400 ml-2">(v1.2)</span>
+                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'} <span className="text-xs text-slate-400 ml-2">(v1.3.1)</span>
                         </h2>
                         <button
                             onClick={handleClearCart}
@@ -468,7 +468,7 @@ export default function POSPage() {
                             </button>
                             <button
                                 disabled={cart.length === 0}
-                                onClick={() => setShowCheckoutModal(true)}
+                                onClick={openCheckoutModal}
                                 className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 <CreditCard className="w-5 h-5" />
@@ -490,7 +490,7 @@ export default function POSPage() {
             </div>
 
             {/* Checkout Modal */}
-            {showCheckoutModal && (
+            {isCheckoutModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col md:flex-row max-h-[90vh]">
 
@@ -520,7 +520,7 @@ export default function POSPage() {
                                     {isPaymentSuccess ? 'Transaksi Sukses' : 'Metode Pembayaran'}
                                 </h3>
                                 {!isPaymentSuccess && (
-                                    <button onClick={() => setShowCheckoutModal(false)} className="text-slate-400 hover:text-slate-600">
+                                    <button onClick={closeCheckoutModal} className="text-slate-400 hover:text-slate-600">
                                         <X className="w-6 h-6" />
                                     </button>
                                 )}

@@ -242,7 +242,7 @@ export default function LoginPage() {
                     </button>
                 </p>
                 <div className="mt-8 flex justify-center items-center gap-4">
-                    <span className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Versi 2.4.0</span>
+                    <span className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Versi 1.3.1 (Latest)</span>
                 </div>
             </div>
         </div>

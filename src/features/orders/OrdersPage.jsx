@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 
 export default function OrdersPage() {
-    const { user, loadOrder, shiftId } = useStore();
+    const { user, loadOrder, shiftId, offlineQueue } = useStore();
     const [orders, setOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -45,7 +45,23 @@ export default function OrdersPage() {
             console.error('Error fetching orders:', error);
         } else {
             console.log('Orders fetched:', data?.length);
-            setOrders(data || []);
+
+            // Merge with offline queue
+            const offlineOrders = offlineQueue
+                .filter(item => item.type === 'ORDER' && item.data.shift_id === (shiftId || 'offline_shift')) // Simplification
+                .map(item => ({
+                    ...item.data,
+                    id: item.id, // Use the temp ID
+                    created_at: item.data.created_at,
+                    is_offline: true
+                }));
+
+            // Combine and sort
+            const allOrders = [...offlineOrders, ...(data || [])].sort((a, b) =>
+                new Date(b.created_at) - new Date(a.created_at)
+            );
+
+            setOrders(allOrders);
         }
         setIsLoading(false);
     };

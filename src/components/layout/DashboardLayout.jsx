@@ -229,9 +229,15 @@ export default function DashboardLayout() {
                     setShowStartWorkModal(false);
                 } else {
                     // Only here, when server CONFIRMS no open shift, do we reset.
-                    setShiftId(null);
-                    setActiveShift(null);
-                    setShowStartWorkModal(true);
+                    // CRITICAL FIX: Do NOT reset if we are currently in an offline session waiting to sync
+                    if (shiftId && String(shiftId).startsWith('offline_')) {
+                        console.log('Preserving local offline shift:', shiftId);
+                        setShowStartWorkModal(false);
+                    } else {
+                        setShiftId(null);
+                        setActiveShift(null);
+                        setShowStartWorkModal(true);
+                    }
                 }
             } catch (err) {
                 console.warn('Shift check failed (likely network):', err);
@@ -745,7 +751,7 @@ ${user?.plan_type === 'free' ? '\n_Powered by Aplikasi Kasir Galang_' : ''}`;
                         {shiftId && (
                             <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-full border border-green-200 dark:border-green-900/50">
                                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-xs font-semibold text-green-700 dark:text-green-400">
+                                <span className="text-xs font-semibold text-green-700 dark:text-emerald-300">
                                     Shift Aktif
                                     {activeShift && ` (${new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
                                 </span>

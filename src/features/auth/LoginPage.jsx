@@ -76,6 +76,25 @@ export default function LoginPage() {
             }
         } catch (error) {
             console.error('Login error:', error);
+
+            // Handle Network Errors (Failed to fetch) -> Fallback to Offline
+            if (error.message && (
+                error.message.includes('failed to fetch') ||
+                error.message.includes('Network request failed') ||
+                error.message.includes('connection')
+            )) {
+                const offlineUser = verifyOfflineLogin(formData.username, formData.password);
+                if (offlineUser) {
+                    setUser(offlineUser);
+                    alert('Koneksi Instabil: Login Offline Berhasil! (Mode Offline)');
+                    navigate('/dashboard');
+                    return;
+                } else {
+                    alert('Gagal Terhubung: Koneksi internet bermasalah dan data login tidak ditemukan di perangkat ini.');
+                    return;
+                }
+            }
+
             // If DB error and using admin credentials, allow login
             if (formData.username === 'admin' && formData.password === 'admin') {
                 const adminUser = {

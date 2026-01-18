@@ -67,6 +67,11 @@ export const useStore = create(
             // UI State
             isLoading: false,
             setLoading: (isLoading) => set({ isLoading }),
+
+            // Global Checkout Modal State
+            isCheckoutModalOpen: false,
+            openCheckoutModal: () => set({ isCheckoutModalOpen: true }),
+            closeCheckoutModal: () => set({ isCheckoutModalOpen: false }),
         }),
         {
             name: 'pos-storage', // unique name

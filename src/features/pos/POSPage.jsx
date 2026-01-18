@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 export default function POSPage() {
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
-    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    // Removed local showCheckoutModal state
     const [customerName, setCustomerName] = useState('');
 
     const [products, setProducts] = useState([]);
@@ -29,7 +29,8 @@ export default function POSPage() {
         cart, addToCart, removeFromCart, clearCart,
         setShiftId, shiftId, user,
         currentOrderId, setCurrentOrderId, updateQuantity,
-        currentCustomerName, setCustomerNameStore
+        currentCustomerName, setCustomerNameStore,
+        isCheckoutModalOpen, openCheckoutModal, closeCheckoutModal // Added global state
     } = useStore();
 
     const setStoreCustomerName = useStore(state => state.setCustomerName);
@@ -43,6 +44,17 @@ export default function POSPage() {
     }, [currentOrderId, storeCustomerName]);
 
     const navigate = useNavigate();
+
+    // Reset payment state when modal opens
+    useEffect(() => {
+        // Global state listener to reset form
+        if (isCheckoutModalOpen) {
+            setPaymentMethod('cash');
+            setCashReceived('');
+            setIsPaymentSuccess(false);
+            setLastOrderId(null);
+        }
+    }, [isCheckoutModalOpen]);
 
     // Check for active shift logic
     useEffect(() => {
@@ -65,6 +77,8 @@ export default function POSPage() {
         };
         checkShift();
     }, [shiftId, user?.storeId]);
+
+
 
     // Data Loaders
     useEffect(() => {

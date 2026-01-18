@@ -16,15 +16,22 @@ import {
     ShoppingBag,
     Lock,
     Wallet,
-    Download
+    Wallet,
+    Download,
+    Trash2,
+    Plus,
+    Minus,
+    CreditCard
 } from 'lucide-react';
 
 export default function DashboardLayout() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const { isInstallable, install } = usePWA();
-    const { user, logout } = useStore();
+    const { user, logout, cart, updateQuantity, clearCart, openCheckoutModal } = useStore();
     const { shiftId, setShiftId } = useStore();
     const navigate = useNavigate();
+
+    const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
     const [storeName, setStoreName] = useState('POS UMKM');
     const [activeShift, setActiveShift] = useState(null);
@@ -492,6 +499,90 @@ ${shoppingDetails}
                     <Outlet />
                 </main>
             </div>
+
+            {/* Mobile Cart Drawer */}
+            {isMobileCartOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMobileCartOpen(false)} />
+                    <div className="absolute top-0 right-0 bottom-0 w-full max-w-sm bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                            <h2 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                                <ShoppingCart className="w-5 h-5 text-primary" />
+                                Keranjang
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm('Hapus semua?')) clearCart();
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-500"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => setIsMobileCartOpen(false)} className="p-2 text-slate-400">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {cart.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                                    <ShoppingCart className="w-12 h-12 mb-3 opacity-20" />
+                                    <p>Keranjang kosong</p>
+                                </div>
+                            ) : (
+                                cart.map((item) => (
+                                    <div key={item.id} className="flex gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-semibold text-slate-900 dark:text-white truncate">{item.name}</h4>
+                                            <p className="text-primary font-medium text-sm">{formatRupiah(item.price)}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, -1)}
+                                                    className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-red-500"
+                                                >
+                                                    <Minus className="w-3 h-3" />
+                                                </button>
+                                                <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, 1)}
+                                                    className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-primary"
+                                                >
+                                                    <Plus className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3 bg-slate-50 dark:bg-slate-800/50">
+                            <div className="flex justify-between items-end">
+                                <span className="font-bold text-slate-900 dark:text-white">Total</span>
+                                <span className="font-bold text-primary text-xl">
+                                    {formatRupiah(cart.reduce((sum, item) => sum + (item.price * item.quantity * 1.11), 0))}
+                                </span>
+                            </div>
+                            <button
+                                disabled={cart.length === 0}
+                                onClick={() => {
+                                    setIsMobileCartOpen(false);
+                                    openCheckoutModal();
+                                    navigate('/pos');
+                                }}
+                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
+                            >
+                                <CreditCard className="w-5 h-5" />
+                                Bayar Sekarang
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

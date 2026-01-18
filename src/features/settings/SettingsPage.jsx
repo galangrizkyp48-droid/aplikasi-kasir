@@ -1,6 +1,7 @@
-import { useNavigate } from 'react-router-dom';
-import { Save, Store, Receipt, Users, Sun, Moon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
+import { Save, Store, Receipt, Users, Sun, Moon } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, theme, toggleTheme } = useStore();

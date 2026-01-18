@@ -232,7 +232,8 @@ export default function OrdersPage() {
         if (!selectedOrder) return;
 
         const itemsList = orderItems.map(item => `- ${item.name} (${item.quantity}x) ${formatRupiah(item.price * item.quantity)}`).join('%0A');
-        const message = `*Struk Pesanan #${selectedOrder.id}*%0A` +
+        let message = `*Struk Pembayaran - POS UMKM*%0A%0A` +
+            `*Struk Pesanan #${selectedOrder.id}*%0A` +
             `Pelanggan: ${customerName}%0A%0A` +
             `*Detail Pesanan:*%0A${itemsList}%0A%0A` +
             `--------------------------------%0A` +

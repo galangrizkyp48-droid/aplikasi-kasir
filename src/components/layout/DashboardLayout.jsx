@@ -174,39 +174,72 @@ export default function DashboardLayout() {
     }, [offlineQueue]);
 
     // Initial Loaders
+    // Initial Loaders & Offline Recovery
     useEffect(() => {
         const loadInitial = async () => {
             if (!user?.storeId) return;
 
-            // Load Store Name
-            const { data: storeSetting } = await supabase
-                .from('settings')
-                .select('value')
-                .eq('store_id', user.storeId)
-                .eq('key', 'storeName')
-                .single();
-            if (storeSetting) setStoreName(storeSetting.value);
+            // Optional: Load Store Name (only if online or if not loaded)
+            if (navigator.onLine) {
+                const { data: storeSetting } = await supabase
+                    .from('settings')
+                    .select('value')
+                    .eq('store_id', user.storeId)
+                    .eq('key', 'storeName')
+                    .single();
+                if (storeSetting) setStoreName(storeSetting.value);
+            }
 
-            // Check for open shift
-            const { data: openShift } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('store_id', user.storeId)
-                .eq('status', 'open')
-                .single();
+            // CRITICAL: Check for open shift
+            try {
+                // Modified Logic: Trust persisted state first if offline or on network error
+                if (!navigator.onLine) {
+                    console.log('Offline: Skipping shift verification. Using persisted shiftId:', shiftId);
+                    if (shiftId) {
+                        setShowStartWorkModal(false);
+                    } else {
+                        // Only show if we truly have no shift recorded and we are offline
+                        // Use a safer check: if we just logged in, we might not know.
+                        // But if we have been using the app, shiftId would be persisted.
+                        setShowStartWorkModal(true);
+                    }
+                    return;
+                }
 
-            if (openShift) {
-                setShiftId(openShift.id);
-                setActiveShift(openShift);
-                setShowStartWorkModal(false);
-            } else {
-                setShiftId(null);
-                setActiveShift(null);
-                setShowStartWorkModal(true);
+                const { data: openShift, error } = await supabase
+                    .from('shifts')
+                    .select('*')
+                    .eq('store_id', user.storeId)
+                    .eq('status', 'open')
+                    .single();
+
+                if (error && error.code !== 'PGRST116') {
+                    // Network error or other non-404 error
+                    console.warn('Network error checking shift, using local validation.');
+                    if (shiftId) {
+                        setShowStartWorkModal(false);
+                    }
+                    // Do not THROW here to avoid falling into catch block that does nothing
+                    return;
+                }
+
+                if (openShift) {
+                    setShiftId(openShift.id);
+                    setActiveShift(openShift);
+                    setShowStartWorkModal(false);
+                } else {
+                    // Only here, when server CONFIRMS no open shift, do we reset.
+                    setShiftId(null);
+                    setActiveShift(null);
+                    setShowStartWorkModal(true);
+                }
+            } catch (err) {
+                console.warn('Shift check failed (likely network):', err);
+                if (shiftId) setShowStartWorkModal(false); // Fallback: if we have ID, assume active
             }
         };
         loadInitial();
-    }, [user?.storeId, shiftId]);
+    }, [user?.storeId, shiftId, isOffline]); // Re-run when online status changes
 
     const handleLogout = () => {
         logout();
@@ -227,6 +260,26 @@ export default function DashboardLayout() {
         if (!user?.storeId) return alert('Gagal: Store ID tidak ditemukan. Silakan login ulang.');
 
         try {
+            // Optimistic Update (Offline Support)
+            const tempShiftId = `offline_${Date.now()}`;
+            if (!navigator.onLine) {
+                const offlineShift = {
+                    id: tempShiftId,
+                    start_time: new Date().toISOString(),
+                    cashier_id: user?.id || 'unknown',
+                    start_cash: Number(startCash),
+                    status: 'open',
+                    store_id: user.storeId
+                };
+                setShiftId(tempShiftId);
+                setActiveShift(offlineShift);
+                setShowStartWorkModal(false);
+                // Queue for sync
+                // Note: We need a sync mechanism for this later, but for now this unblocks the UI
+                alert('Shift dimulai (Mode Offline). Data akan disinkronkan saat online.');
+                return;
+            }
+
             const { data: newShift, error } = await supabase
                 .from('shifts')
                 .insert([{
@@ -241,6 +294,7 @@ export default function DashboardLayout() {
 
             if (error) throw error;
             setShiftId(newShift.id);
+            setActiveShift(newShift); // Ensure active shift is updated immediately
             setShowStartWorkModal(false);
             alert('Selamat Bekerja! Shift dimulai.');
         } catch (error) {

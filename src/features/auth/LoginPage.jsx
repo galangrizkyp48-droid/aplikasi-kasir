@@ -21,19 +21,35 @@ export default function LoginPage() {
     });
 
     const navigate = useNavigate();
-    const setUser = useStore((state) => state.setUser);
+    const saveUserCredential = useStore((state) => state.saveUserCredential);
+    const verifyOfflineLogin = useStore((state) => state.verifyOfflineLogin);
 
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
+            // Check Offline First
+            if (!navigator.onLine) {
+                const offlineUser = verifyOfflineLogin(formData.username, formData.password);
+                if (offlineUser) {
+                    setUser(offlineUser);
+                    alert('Login Offline Berhasil! Beberapa fitur mungkin terbatas.');
+                    navigate('/dashboard');
+                } else {
+                    alert('Login Gagal: Data pengguna tidak ditemukan di perangkat ini. Harap online terlebih dahulu untuk login pertama kali.');
+                }
+                return;
+            }
+
             // Fallback Admin first (no DB dependency)
             if (formData.username === 'admin' && formData.password === 'admin') {
-                setUser({
+                const adminUser = {
                     id: 'admin',
                     name: 'Administrator',
                     role: 'owner',
-                    storeId: 'admin-store' // Default storeId for admin
-                });
+                    storeId: 'admin-store'
+                };
+                setUser(adminUser);
+                saveUserCredential(adminUser, formData.password); // Cache admin too
                 navigate('/dashboard');
                 return;
             }
@@ -48,10 +64,12 @@ export default function LoginPage() {
             if (error && error.code !== 'PGRST116') throw error;
 
             if (user && user.password === formData.password) {
-                setUser({
+                const sessionUser = {
                     ...user,
                     storeId: user.store_id
-                });
+                };
+                setUser(sessionUser);
+                saveUserCredential(sessionUser, formData.password); // Cache for offline
                 navigate('/dashboard');
             } else {
                 alert('Username atau password salah!');
@@ -60,12 +78,13 @@ export default function LoginPage() {
             console.error('Login error:', error);
             // If DB error and using admin credentials, allow login
             if (formData.username === 'admin' && formData.password === 'admin') {
-                setUser({
+                const adminUser = {
                     id: 'admin',
                     name: 'Administrator',
                     role: 'owner',
                     storeId: 'admin-store'
-                });
+                };
+                setUser(adminUser);
                 navigate('/dashboard');
             } else {
                 alert('Login error: ' + error.message);

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:apk": "npm run build && npx cap sync && cd android && set \"JAVA_HOME=C:\\Program Files\\Android\\Android Studio\\jbr\" && gradlew --stop && gradlew clean && gradlew assembleRelease && cd ..",
+    "build:aab": "npm run build && npx cap sync && cd android && set \"JAVA_HOME=C:\\Program Files\\Android\\Android Studio\\jbr\" && gradlew --stop && gradlew clean && gradlew bundleRelease && cd ..",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -14,6 +14,30 @@ export const useStore = create(
                 return state.user?.username === 'galang'; // Super admin username
             },
 
+            // Offline Auth
+            savedUsers: [], // [{ username, password, name, role, storeId, ... }]
+            saveUserCredential: (userData, password) => set((state) => {
+                const existingIndex = state.savedUsers.findIndex(u => u.username === userData.username);
+                const newUser = { ...userData, password, lastLogin: new Date().toISOString() };
+
+                let newSavedUsers;
+                if (existingIndex >= 0) {
+                    newSavedUsers = [...state.savedUsers];
+                    newSavedUsers[existingIndex] = newUser;
+                } else {
+                    newSavedUsers = [...state.savedUsers, newUser];
+                }
+                return { savedUsers: newSavedUsers };
+            }),
+            verifyOfflineLogin: (username, password) => {
+                const state = useStore.getState();
+                const user = state.savedUsers.find(u => u.username === username);
+                if (user && user.password === password) {
+                    return user;
+                }
+                return null;
+            },
+
             // Theme State
             theme: 'light',
             toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
@@ -108,7 +132,10 @@ export const useStore = create(
                 currentCustomerName: state.currentCustomerName,
                 products: state.products,
                 categories: state.categories,
-                offlineQueue: state.offlineQueue
+                products: state.products,
+                categories: state.categories,
+                offlineQueue: state.offlineQueue,
+                savedUsers: state.savedUsers // Persist offline credentials
             }), // Only persist these fields
         }
     )

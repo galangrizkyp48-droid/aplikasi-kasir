@@ -43,8 +43,7 @@ export default function AdminPage() {
                     message: newAnnouncement.message,
                     type: newAnnouncement.type,
                     created_by: user?.username || 'Admin',
-                    is_active: true,
-                    created_at: new Date().toISOString()
+                    is_active: true
                 }]);
 
             if (error) throw error;
@@ -428,8 +427,8 @@ export default function AdminPage() {
                                                 value={u.plan_type || 'free'}
                                                 onChange={(e) => handleUpdatePlan(u.id, e.target.value)}
                                                 className={`px-2 py-1 rounded text-xs font-bold border-0 cursor-pointer ${u.plan_type === 'pro'
-                                                        ? 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-400'
-                                                        : 'bg-slate-100 text-slate-800 ring-1 ring-slate-400'
+                                                    ? 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-400'
+                                                    : 'bg-slate-100 text-slate-800 ring-1 ring-slate-400'
                                                     }`}
                                             >
                                                 <option value="free">FREE</option>

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 
 export default function OrdersPage() {
-    const { user, loadOrder } = useStore();
+    const { user, loadOrder, shiftId } = useStore();
     const [orders, setOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -30,14 +30,15 @@ export default function OrdersPage() {
     const navigate = useNavigate();
 
     const fetchOrders = async () => {
-        if (!user?.storeId) return;
+        if (!user?.storeId || !shiftId) return;
         setIsLoading(true);
-        console.log('Fetching orders for store:', user?.storeId);
+        console.log('Fetching orders for shift:', shiftId);
 
         const { data, error } = await supabase
             .from('orders')
             .select('*')
             .eq('store_id', user.storeId)
+            .eq('shift_id', shiftId)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -50,7 +51,7 @@ export default function OrdersPage() {
     };
 
     useEffect(() => {
-        if (!user?.storeId) return;
+        if (!user?.storeId || !shiftId) return;
 
         fetchOrders();
 
@@ -75,7 +76,7 @@ export default function OrdersPage() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user?.storeId]);
+    }, [user?.storeId, shiftId]);
 
     const handleResumeOrder = async (order) => {
         const { data: items } = await supabase

@@ -117,6 +117,25 @@ export default function AdminPage() {
         }
     };
 
+    const handleUpdatePlan = async (userId, newPlan) => {
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ plan_type: newPlan })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            setUsers(users.map(u =>
+                u.id === userId ? { ...u, plan_type: newPlan } : u
+            ));
+
+            // alert(`Plan berhasil diubah ke ${newPlan.toUpperCase()}`);
+        } catch (error) {
+            alert('Gagal update plan: ' + error.message);
+        }
+    };
+
     const fetchUsers = async () => {
         setIsLoading(true);
         const { data, error } = await supabase
@@ -405,9 +424,17 @@ export default function AdminPage() {
                                             {u.store_id}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold ${u.plan_type === 'pro' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
-                                                {u.plan_type?.toUpperCase() || 'FREE'}
-                                            </span>
+                                            <select
+                                                value={u.plan_type || 'free'}
+                                                onChange={(e) => handleUpdatePlan(u.id, e.target.value)}
+                                                className={`px-2 py-1 rounded text-xs font-bold border-0 cursor-pointer ${u.plan_type === 'pro'
+                                                        ? 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-400'
+                                                        : 'bg-slate-100 text-slate-800 ring-1 ring-slate-400'
+                                                    }`}
+                                            >
+                                                <option value="free">FREE</option>
+                                                <option value="pro">PRO</option>
+                                            </select>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">

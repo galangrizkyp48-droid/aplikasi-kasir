@@ -557,6 +557,11 @@ export default function OrdersPage() {
                             </div>
 
                             <div className="space-y-3 mt-6">
+                                {user?.plan_type === 'free' && (
+                                    <div className="mb-4 pt-2 border-t border-dashed border-slate-300 dark:border-slate-700 text-center">
+                                        <p className="text-xs text-slate-400 italic">Powered by Aplikasi Kasir Galang</p>
+                                    </div>
+                                )}
                                 <button
                                     onClick={sendWhatsApp}
                                     className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-green-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"

@@ -14,6 +14,7 @@ import SettingsPage from './features/settings/SettingsPage';
 import ShoppingListPage from './features/shopping-list/ShoppingListPage';
 import ExpensesPage from './features/expenses/ExpensesPage';
 import AdminPage from './features/admin/AdminPage';
+import SubscriptionPage from './features/settings/SubscriptionPage';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -56,7 +57,9 @@ function App() {
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/products/new" element={<ProductFormPage />} />
           <Route path="/products/:id" element={<ProductFormPage />} />
+          <Route path="/products/:id" element={<ProductFormPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/subscription" element={<SubscriptionPage />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

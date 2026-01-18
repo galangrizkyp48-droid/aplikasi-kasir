@@ -264,47 +264,69 @@ export default function SettingsPage() {
                         {/* Add Employee Form */}
                         <div className="pt-6 border-t border-slate-200 dark:border-slate-800">
                             <h4 className="font-semibold text-sm text-slate-700 dark:text-slate-300 mb-4">Tambah Karyawan Baru</h4>
-                            <form onSubmit={handleAddEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input
-                                    placeholder="Nama Lengkap"
-                                    value={newEmployee.name}
-                                    onChange={e => setNewEmployee({ ...newEmployee, name: e.target.value })}
-                                    className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    required
-                                />
-                                <input
-                                    placeholder="Username Login"
-                                    value={newEmployee.username}
-                                    onChange={e => setNewEmployee({ ...newEmployee, username: e.target.value })}
-                                    className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    required
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Password"
-                                    value={newEmployee.password}
-                                    onChange={e => setNewEmployee({ ...newEmployee, password: e.target.value })}
-                                    className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    required
-                                />
-                                <select
-                                    value={newEmployee.role}
-                                    onChange={e => setNewEmployee({ ...newEmployee, role: e.target.value })}
-                                    className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                >
-                                    <option value="cashier">Kasir</option>
-                                    <option value="kitchen">Dapur</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                                <div className="md:col-span-2 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+
+                            {user?.plan_type === 'free' ? (
+                                <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-6 text-white text-center">
+                                    <div className="flex justify-center mb-3">
+                                        <div className="p-3 bg-white/10 rounded-full">
+                                            <Users className="w-6 h-6 text-yellow-400" />
+                                        </div>
+                                    </div>
+                                    <h3 className="font-bold text-lg mb-1">Upgrade ke PRO</h3>
+                                    <p className="text-slate-300 text-sm mb-4">
+                                        Paket Free hanya untuk 1 user (Owner).<br />
+                                        Upgrade untuk menambahkan karyawan unlimited.
+                                    </p>
+                                    <a
+                                        href="/subscription"
+                                        className="inline-block bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-6 rounded-lg transition-colors"
                                     >
-                                        + Tambah Akun
-                                    </button>
+                                        Lihat Paket
+                                    </a>
                                 </div>
-                            </form>
+                            ) : (
+                                <form onSubmit={handleAddEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input
+                                        placeholder="Nama Lengkap"
+                                        value={newEmployee.name}
+                                        onChange={e => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                                        className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                        required
+                                    />
+                                    <input
+                                        placeholder="Username Login"
+                                        value={newEmployee.username}
+                                        onChange={e => setNewEmployee({ ...newEmployee, username: e.target.value })}
+                                        className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                        required
+                                    />
+                                    <input
+                                        type="password"
+                                        placeholder="Password"
+                                        value={newEmployee.password}
+                                        onChange={e => setNewEmployee({ ...newEmployee, password: e.target.value })}
+                                        className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                        required
+                                    />
+                                    <select
+                                        value={newEmployee.role}
+                                        onChange={e => setNewEmployee({ ...newEmployee, role: e.target.value })}
+                                        className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                    >
+                                        <option value="cashier">Kasir</option>
+                                        <option value="kitchen">Dapur</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                    <div className="md:col-span-2 flex justify-end">
+                                        <button
+                                            type="submit"
+                                            className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                                        >
+                                            + Tambah Akun
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -45,6 +45,19 @@ export default function DashboardLayout() {
 
     const [storeName, setStoreName] = useState('POS UMKM');
     const [activeShift, setActiveShift] = useState(null);
+    const [activeAnnouncements, setActiveAnnouncements] = useState([]);
+
+    useEffect(() => {
+        const fetchAnnouncements = async () => {
+            const { data } = await supabase
+                .from('system_announcements')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+            if (data) setActiveAnnouncements(data);
+        };
+        fetchAnnouncements();
+    }, []);
 
     // Sync Offline Data
     const syncOfflineData = async () => {
@@ -666,6 +679,37 @@ ${shoppingDetails}
                 </header>
 
                 <main className="flex-1 overflow-auto p-4 lg:p-8">
+                    {/* System Announcements Banner */}
+                    {activeAnnouncements.map(ann => (
+                        <div key={ann.id} className={`mb-6 p-4 rounded-xl border flex items-start gap-3 shadow-sm ${ann.type === 'critical' ? 'bg-red-50 border-red-200 text-red-800' :
+                            ann.type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                                'bg-blue-50 border-blue-200 text-blue-800'
+                            }`}>
+                            <div className={`p-2 rounded-lg ${ann.type === 'critical' ? 'bg-red-100 text-red-600' :
+                                ann.type === 'warning' ? 'bg-yellow-100 text-yellow-600' :
+                                    'bg-blue-100 text-blue-600'
+                                }`}>
+                                <Shield className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-sm uppercase mb-1 flex items-center gap-2">
+                                    {ann.title}
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/50 border border-black/5 border-dashed">
+                                        System Announcement
+                                    </span>
+                                </h4>
+                                <p className="text-sm opacity-90 leading-relaxed">
+                                    {ann.message}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setActiveAnnouncements(prev => prev.filter(a => a.id !== ann.id))}
+                                className="p-1 hover:bg-black/5 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 opacity-50" />
+                            </button>
+                        </div>
+                    ))}
                     <Outlet />
                 </main>
             </div>

@@ -14,6 +14,20 @@ export default function ReportsPage() {
     const [shiftTransactions, setShiftTransactions] = useState([]);
     const [dailyExpenses, setDailyExpenses] = useState([]);
 
+    // Enforce Free Plan Limit (Max 3 Days)
+    useEffect(() => {
+        if (user?.plan_type === 'free') {
+            const threeDaysAgo = new Date();
+            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+            const selected = new Date(selectedDate);
+
+            if (selected < threeDaysAgo) {
+                alert('Plan Free hanya bisa melihat laporan 3 hari terakhir. Upgrade ke Pro untuk akses unlimited.');
+                setSelectedDate(new Date().toISOString().split('T')[0]);
+            }
+        }
+    }, [selectedDate, user?.plan_type]);
+
     const fetchShiftsAndDailyTx = async () => {
         if (!user?.storeId) return;
 
@@ -120,8 +134,14 @@ export default function ReportsPage() {
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
                         className="bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-300 font-bold"
+                        min={user?.plan_type === 'free' ? new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined}
                     />
                 </div>
+                {user?.plan_type === 'free' && (
+                    <div className="text-xs text-orange-500 font-medium bg-orange-100 px-2 py-1 rounded">
+                        Free Limit: 3 Hari
+                    </div>
+                )}
             </div>
 
 

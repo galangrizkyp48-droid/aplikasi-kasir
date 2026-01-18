@@ -60,7 +60,28 @@ export default function AdminPage() {
             activeToday: 0, // Could implement with last_login field
             newThisWeek: newThisWeek || 0
         });
+
+        // Fetch Subscription Stats (Active Pro Users)
+        const { count: proUsers } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('plan_type', 'pro');
+
+        setStats(prev => ({ ...prev, activePro: proUsers || 0 }));
     };
+
+    const [transactions, setTransactions] = useState([]);
+    useEffect(() => {
+        const fetchTransactions = async () => {
+            const { data } = await supabase
+                .from('subscription_transactions')
+                .select('*, users(username, store_id)')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (data) setTransactions(data);
+        };
+        fetchTransactions();
+    }, []);
 
     const filteredUsers = users.filter(u =>
         u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -93,18 +114,18 @@ export default function AdminPage() {
                         Admin Dashboard
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400">
-                        Monitoring semua users & stores
+                        Monitoring & Kontrol Sistem
                     </p>
                 </div>
                 <button
-                    onClick={fetchUsers}
+                    onClick={() => { fetchUsers(); fetchStats(); }}
                     className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium"
                 >
                     Refresh Data
                 </button>
             </div>
 
-            {/* Stats Cards */}
+            {/* Global Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex items-center gap-4">
@@ -113,9 +134,7 @@ export default function AdminPage() {
                         </div>
                         <div>
                             <p className="text-sm font-medium text-slate-500">Total Users</p>
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {stats.totalUsers}
-                            </h3>
+                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalUsers}</h3>
                         </div>
                     </div>
                 </div>
@@ -123,13 +142,25 @@ export default function AdminPage() {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg">
-                            <Store className="w-6 h-6" />
+                            <Activity className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-slate-500">Total Stores</p>
+                            <p className="text-sm font-medium text-slate-500">Pendapatan App</p>
                             <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {stats.totalStores}
+                                {formatRupiah(transactions.reduce((sum, t) => sum + (t.amount || 0), 0))}
                             </h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-lg">
+                            <TrendingUp className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Active Pro Users</p>
+                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{stats.activePro || 0}</h3>
                         </div>
                     </div>
                 </div>
@@ -137,28 +168,79 @@ export default function AdminPage() {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg">
-                            <TrendingUp className="w-6 h-6" />
+                            <Store className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-slate-500">New (7 Days)</p>
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {stats.newThisWeek}
-                            </h3>
+                            <p className="text-sm font-medium text-slate-500">Total Stores</p>
+                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalStores}</h3>
                         </div>
                     </div>
                 </div>
+            </div>
 
+            {/* Announcement Management */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Create Form */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-lg">
-                            <Activity className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-slate-500">Active Today</p>
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {stats.activeToday}
-                            </h3>
-                        </div>
+                    <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Buat Pengumuman</h3>
+                    <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Judul Pengumuman"
+                            value={newAnnouncement.title}
+                            onChange={e => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                            className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent"
+                            required
+                        />
+                        <select
+                            value={newAnnouncement.type}
+                            onChange={e => setNewAnnouncement({ ...newAnnouncement, type: e.target.value })}
+                            className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent"
+                        >
+                            <option value="info">Info (Biru)</option>
+                            <option value="warning">Peringatan (Kuning)</option>
+                            <option value="critical">Penting (Merah)</option>
+                        </select>
+                        <textarea
+                            placeholder="Isi Pengumuman..."
+                            value={newAnnouncement.message}
+                            onChange={e => setNewAnnouncement({ ...newAnnouncement, message: e.target.value })}
+                            className="w-full px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent"
+                            rows="3"
+                            required
+                        ></textarea>
+                        <button className="w-full py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90">
+                            Kirim Pengumuman
+                        </button>
+                    </form>
+                </div>
+
+                {/* List Announcements */}
+                <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Pengumuman Aktif</h3>
+                    <div className="space-y-4">
+                        {announcements.map(ann => (
+                            <div key={ann.id} className="flex justify-between items-start p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`px-2 py-0.5 text-xs font-bold uppercase rounded ${ann.type === 'critical' ? 'bg-red-100 text-red-700' :
+                                                ann.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                                                    'bg-blue-100 text-blue-700'
+                                            }`}>{ann.type}</span>
+                                        <h4 className="font-bold text-slate-900 dark:text-white">{ann.title}</h4>
+                                    </div>
+                                    <p className="text-sm text-slate-600 dark:text-slate-300">{ann.message}</p>
+                                    <p className="text-xs text-slate-400 mt-2">Posted by {ann.created_by} on {new Date(ann.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <button
+                                    onClick={() => handleDeleteAnnouncement(ann.id)}
+                                    className="text-red-500 hover:text-red-700 p-2"
+                                >
+                                    <Shield className="w-4 h-4" /> Hapus
+                                </button>
+                            </div>
+                        ))}
+                        {announcements.length === 0 && <p className="text-slate-500 text-center py-4">Tidak ada pengumuman aktif.</p>}
                     </div>
                 </div>
             </div>
@@ -189,7 +271,7 @@ export default function AdminPage() {
                                 <th className="px-6 py-4 font-medium">Nama/Bisnis</th>
                                 <th className="px-6 py-4 font-medium">Role</th>
                                 <th className="px-6 py-4 font-medium">Store ID</th>
-                                <th className="px-6 py-4 font-medium">Terdaftar</th>
+                                <th className="px-6 py-4 font-medium">Plan</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -216,8 +298,8 @@ export default function AdminPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded text-xs font-bold ${u.role === 'owner'
-                                                    ? 'bg-blue-100 text-blue-700'
-                                                    : 'bg-green-100 text-green-700'
+                                                ? 'bg-blue-100 text-blue-700'
+                                                : 'bg-green-100 text-green-700'
                                                 }`}>
                                                 {u.role}
                                             </span>
@@ -225,8 +307,10 @@ export default function AdminPage() {
                                         <td className="px-6 py-4 font-mono text-xs text-slate-500">
                                             {u.store_id}
                                         </td>
-                                        <td className="px-6 py-4 text-slate-500">
-                                            {new Date(u.created_at).toLocaleDateString('id-ID')}
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${u.plan_type === 'pro' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                {u.plan_type?.toUpperCase() || 'FREE'}
+                                            </span>
                                         </td>
                                     </tr>
                                 ))

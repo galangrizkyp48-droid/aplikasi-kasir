@@ -478,6 +478,19 @@ ${shoppingDetails}
                     </button>
 
                     <div className="flex items-center gap-4 ml-auto">
+                        {/* Mobile Cart Toggle */}
+                        <button
+                            onClick={() => setIsMobileCartOpen(true)}
+                            className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg lg:hidden"
+                        >
+                            <ShoppingCart className="w-6 h-6" />
+                            {cart.length > 0 && (
+                                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                    {cart.reduce((a, c) => a + c.quantity, 0)}
+                                </span>
+                            )}
+                        </button>
+
                         {/* Valid Shift Indicator / End Shift Button */}
                         {shiftId && (
                             <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-full border border-green-200 dark:border-green-900/50">

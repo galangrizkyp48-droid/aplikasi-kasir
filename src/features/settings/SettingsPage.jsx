@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
+import { Save, Store, Receipt, Users, Sun, Moon } from 'lucide-react';
 import { useStore } from '../../lib/store';
-import { Save, Store, Receipt, Users } from 'lucide-react';
 
 export default function SettingsPage() {
-    const { user } = useStore();
+    const { user, theme, toggleTheme } = useStore();
     const [settings, setSettings] = useState({
         storeName: '',
         storeAddress: '',
@@ -137,6 +136,32 @@ export default function SettingsPage() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
+                {/* Theme Toggle */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-slate-800 text-yellow-400' : 'bg-orange-100 text-orange-600'}`}>
+                                {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+                            </div>
+                            <div>
+                                <p className="font-medium text-slate-900 dark:text-white">Tampilan Aplikasi</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    {theme === 'dark' ? 'Mode Gelap' : 'Mode Terang'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={toggleTheme}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-primary' : 'bg-slate-200'}`}
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`}
+                            />
+                        </button>
+                    </div>
+                </div>
+
                 {/* Store Profile Section */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-2">

@@ -48,6 +48,11 @@ export default function DashboardLayout() {
     const [activeAnnouncements, setActiveAnnouncements] = useState([]);
 
     useEffect(() => {
+        // Request Notification Permission
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+
         const fetchAnnouncements = async () => {
             const { data } = await supabase
                 .from('system_announcements')
@@ -56,7 +61,30 @@ export default function DashboardLayout() {
                 .order('created_at', { ascending: false });
             if (data) setActiveAnnouncements(data);
         };
+
         fetchAnnouncements();
+
+        // Realtime Subscription
+        const subscription = supabase
+            .channel('public:system_announcements')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_announcements' }, payload => {
+                if (payload.new.is_active) {
+                    setActiveAnnouncements(prev => [payload.new, ...prev]);
+
+                    // Trigger System Notification
+                    if (Notification.permission === 'granted') {
+                        new Notification(payload.new.title, {
+                            body: payload.new.message,
+                            icon: '/pwa-192x192.png' // Ensure this exists or use a valid path
+                        });
+                    }
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(subscription);
+        };
     }, []);
 
     // Sync Offline Data

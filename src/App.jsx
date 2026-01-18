@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from './lib/store';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
@@ -15,6 +15,7 @@ import ShoppingListPage from './features/shopping-list/ShoppingListPage';
 import ExpensesPage from './features/expenses/ExpensesPage';
 import AdminPage from './features/admin/AdminPage';
 import SubscriptionPage from './features/settings/SubscriptionPage';
+import SplashScreen from './components/common/SplashScreen';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -26,6 +27,24 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const theme = useStore((state) => state.theme);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const { updateServiceWorker } = useRegisterSW({
     onRegistered(r) {
       if (r) {
@@ -36,6 +55,10 @@ function App() {
       }
     }
   });
+
+  if (showSplash) {
+    return <SplashScreen />;
+  }
 
   return (
     <BrowserRouter>

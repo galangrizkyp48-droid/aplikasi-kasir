@@ -11,7 +11,12 @@ export const useStore = create(
             isSuperAdmin: () => {
                 const state = useStore.getState();
                 return state.user?.username === 'galang'; // Super admin username
+                return state.user?.username === 'galang'; // Super admin username
             },
+
+            // Theme State
+            theme: 'light',
+            toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
 
             // Shift State
             shiftId: null,
@@ -96,6 +101,7 @@ export const useStore = create(
             name: 'pos-storage', // unique name
             partialize: (state) => ({
                 user: state.user,
+                theme: state.theme,
                 shiftId: state.shiftId,
                 cart: state.cart,
                 currentOrderId: state.currentOrderId,

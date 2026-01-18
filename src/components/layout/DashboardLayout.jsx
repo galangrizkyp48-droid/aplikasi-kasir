@@ -209,7 +209,10 @@ export default function DashboardLayout() {
                 : '- Tidak ada pengeluaran';
 
             const shoppingDetails = endWorkStats.shoppingLists?.length > 0
-                ? endWorkStats.shoppingLists.map(l => `- ${l.title}: ${formatRupiah(l.total_estimated)}`).join('\n')
+                ? endWorkStats.shoppingLists.map(l => {
+                    const itemsStr = l.items?.map(i => `   • ${i.name} (${i.quantity}x) - ${formatRupiah(i.price * i.quantity)}`).join('\n') || '';
+                    return `- ${l.title} (Total: ${formatRupiah(l.total_estimated)})\n${itemsStr}`;
+                }).join('\n\n')
                 : '- Tidak ada belanjaan';
 
             const message = `*Laporan Pekerjaan: ${new Date().toLocaleDateString('id-ID')}*

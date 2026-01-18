@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Clock, Wallet, Lock, Banknote, Share2, Printer, CheckCircle2, X, ChefHat, Save } from 'lucide-react';
 import { formatRupiah, cn } from '../../lib/utils';
+import { APP_VERSION } from '../../lib/version';
 import { useNavigate } from 'react-router-dom';
 
 export default function POSPage() {
@@ -392,7 +393,7 @@ export default function POSPage() {
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <h2 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5 text-primary" />
-                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'} <span className="text-xs text-slate-400 ml-2">(v1.3.1)</span>
+                            {currentOrderId ? `Edit Pesanan #${currentOrderId}` : 'Pesanan Baru'} <span className="text-xs text-slate-400 ml-2">({APP_VERSION})</span>
                         </h2>
                         <button
                             onClick={handleClearCart}

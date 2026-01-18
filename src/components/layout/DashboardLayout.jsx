@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useStore } from '../../lib/store';
 import { usePWA } from '../../hooks/usePWA';
 import { cn, formatRupiah } from '../../lib/utils';
+import { APP_VERSION } from '../../lib/version';
 import {
     LayoutDashboard,
     ShoppingCart,
@@ -44,7 +45,6 @@ export default function DashboardLayout() {
 
     const [storeName, setStoreName] = useState('POS UMKM');
     const [activeShift, setActiveShift] = useState(null);
-    const APP_VERSION = 'v1.3.1';
 
     // Sync Offline Data
     const syncOfflineData = async () => {

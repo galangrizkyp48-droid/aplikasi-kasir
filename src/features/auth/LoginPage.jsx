@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../../lib/store';
+import { APP_VERSION } from '../../lib/version';
 import { useNavigate } from 'react-router-dom';
 import { supabase, seedDatabase } from '../../lib/supabase';
 
@@ -242,7 +243,7 @@ export default function LoginPage() {
                     </button>
                 </p>
                 <div className="mt-8 flex justify-center items-center gap-4">
-                    <span className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Versi 1.3.1 (Latest)</span>
+                    <span className="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Versi {APP_VERSION}</span>
                 </div>
             </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { formatRupiah, cn } from '../../lib/utils';
-import { Clock, ChefHat, CheckCircle2, PackageCheck, X, Wallet, CreditCard, Banknote, Edit2, Share2, Printer, ArrowLeftRight } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle2, PackageCheck, X, Wallet, CreditCard, Banknote, Edit2, Share2, Printer, ArrowLeftRight, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 
@@ -147,6 +147,27 @@ export default function OrdersPage() {
             alert('Gagal update status: ' + error.message);
         } else {
             fetchOrders();
+        }
+    };
+
+    const handleDeleteOrder = async (order) => {
+        if (!window.confirm(`Hapus pesanan #${order.id} atas nama ${order.customer_name}?`)) return;
+
+        try {
+            // Delete Order Items first (Cascade usually handles this, but safe to be explicit if needed, though schema has CASCADE)
+            // Schema has ON DELETE CASCADE for order_items, so just deleting order is enough.
+            const { error } = await supabase
+                .from('orders')
+                .delete()
+                .eq('id', order.id);
+
+            if (error) throw error;
+
+            setOrders(prev => prev.filter(o => o.id !== order.id));
+            alert('Pesanan dihapus.');
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Gagal menghapus pesanan: ' + error.message);
         }
     };
 
@@ -401,7 +422,14 @@ export default function OrdersPage() {
                                             <Edit2 className="w-4 h-4" />
                                             Edit
                                         </button>
-                                        <div className="col-span-1 flex gap-2">
+                                        <button
+                                            onClick={() => handleDeleteOrder(order)}
+                                            className="col-span-1 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Hapus
+                                        </button>
+                                        <div className="col-span-2 flex gap-2">
                                             <button
                                                 onClick={() => {
                                                     setSelectedOrder(order);
@@ -447,11 +475,11 @@ export default function OrdersPage() {
                                 )}
                                 {order.status === 'ready' && (
                                     <button
-                                        onClick={() => handleMarkAsPaid(order)}
+                                        onClick={() => handleResumeOrder(order)}
                                         className="col-span-2 w-full py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
                                     >
                                         <Wallet className="w-4 h-4" />
-                                        Tandai Sudah Bayar
+                                        Bayar Sekarang / Lihat Bill
                                     </button>
                                 )}
                                 {(order.status === 'paid' || order.status === 'completed') && (

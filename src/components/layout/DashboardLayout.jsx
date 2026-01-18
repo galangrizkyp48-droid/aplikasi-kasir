@@ -28,6 +28,7 @@ export default function DashboardLayout() {
 
     const [storeName, setStoreName] = useState('POS UMKM');
     const [activeShift, setActiveShift] = useState(null);
+    const APP_VERSION = 'v1.3.0'; // Update this to force visual change logic check
 
     // Initial Loaders
     useEffect(() => {
@@ -132,20 +133,20 @@ export default function DashboardLayout() {
                 return;
             }
 
-            // 3. Fetch Shopping List Expenses
+            // 3. Fetch Shopping List Expenses (Detailed)
             const today = new Date().toISOString().split('T')[0];
             const { data: shoppingLists } = await supabase
                 .from('shopping_lists')
-                .select('total_estimated')
+                .select('title, total_estimated, items')
                 .eq('store_id', user.storeId)
                 .eq('date', today);
 
             const totalShopping = shoppingLists?.reduce((sum, list) => sum + (list.total_estimated || 0), 0) || 0;
 
-            // 4. Fetch Operational Expenses (New)
+            // 4. Fetch Operational Expenses (Detailed)
             const { data: expenses } = await supabase
                 .from('expenses')
-                .select('amount')
+                .select('title, amount')
                 .eq('shift_id', shiftId);
 
             const totalExpenses = expenses?.reduce((sum, exp) => sum + (exp.amount || 0), 0) || 0;
@@ -156,9 +157,11 @@ export default function DashboardLayout() {
                 totalSales,
                 txCount,
                 totalShopping,
-                totalExpenses, // Added
-                netIncome: totalSales - totalShopping - totalExpenses, // Updated Formula
-                expectedCash: (currentShift.start_cash || 0) + totalSales - totalExpenses // Assumes expenses are taken from cash drawer
+                shoppingLists: shoppingLists || [],
+                totalExpenses,
+                expensesList: expenses || [],
+                netIncome: totalSales - totalShopping - totalExpenses,
+                expectedCash: (currentShift.start_cash || 0) + totalSales - totalExpenses
             });
             setShowEndShiftModal(true);
         } catch (e) {
@@ -194,6 +197,14 @@ export default function DashboardLayout() {
             if (error) throw error;
 
             // Send to WhatsApp
+            const expenseDetails = endWorkStats.expensesList?.length > 0
+                ? endWorkStats.expensesList.map(e => `- ${e.title}: ${formatRupiah(e.amount)}`).join('\n')
+                : '- Tidak ada pengeluaran';
+
+            const shoppingDetails = endWorkStats.shoppingLists?.length > 0
+                ? endWorkStats.shoppingLists.map(l => `- ${l.title}: ${formatRupiah(l.total_estimated)}`).join('\n')
+                : '- Tidak ada belanjaan';
+
             const message = `*Laporan Pekerjaan: ${new Date().toLocaleDateString('id-ID')}*
 ---------------------------
 Kasir: ${user?.name || 'Staff'}
@@ -206,6 +217,12 @@ Operasional: ${formatRupiah(endWorkStats.totalExpenses)}
 ---------------------------
 *Pendapatan Bersih: ${formatRupiah(endWorkStats.netIncome)}*
 Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
+
+*Catatan Pengeluaran:*
+${expenseDetails}
+
+*List Belanjaan:*
+${shoppingDetails}
 `;
             const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
@@ -302,7 +319,7 @@ Total Uang Fisik: ${formatRupiah(endWorkStats.expectedCash)}
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user?.name || 'User'}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user?.role || 'Staff'}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user?.role || 'Staff'} • {APP_VERSION}</p>
                         </div>
                     </div>
                     <button

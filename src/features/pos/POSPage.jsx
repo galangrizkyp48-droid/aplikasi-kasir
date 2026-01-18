@@ -23,6 +23,7 @@ export default function POSPage() {
 
     // Shift State
     const [isShiftOpen, setIsShiftOpen] = useState(false);
+    const [whatsappNumber, setWhatsappNumber] = useState('');
 
     const {
         cart, addToCart, removeFromCart, clearCart,
@@ -284,14 +285,14 @@ export default function POSPage() {
             `Status: LUNAS (${paymentMethod.toUpperCase()})\n\n` +
             `Terima kasih telah berbelanja!`;
 
-        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+        window.open(`https://wa.me/${whatsappNumber || ''}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     return (
         <>
             <div className="block md:flex md:flex-row h-auto md:h-[calc(100vh-theme(spacing.32))] gap-6">
                 {/* Product Grid (Left) */}
-                <div className="w-full md:flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px] md:min-h-0 mb-6 md:mb-0">
+                <div className="order-last md:order-first w-full md:flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px] md:min-h-0 mb-6 md:mb-0">
                     {/* Filter Header */}
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
                         <div className="relative">
@@ -344,8 +345,14 @@ export default function POSPage() {
                                         key={product.id}
                                         onClick={() => addToCart(product)}
                                         disabled={isOutOfStock}
-                                        className="group flex flex-col p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:shadow-md transition-all text-left"
+                                        className="relative group flex flex-col p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:shadow-md transition-all text-left"
                                     >
+                                        {/* Counter Badge */}
+                                        {cart.find(c => c.id === product.id) && (
+                                            <div className="absolute top-2 right-2 bg-primary text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm z-10">
+                                                {cart.find(c => c.id === product.id).quantity}
+                                            </div>
+                                        )}
                                         <div className="mb-3 w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 group-hover:text-primary transition-colors">
                                             <span className="material-symbols-outlined">restaurant</span>
                                         </div>
@@ -367,7 +374,7 @@ export default function POSPage() {
                 </div>
 
                 {/* Cart Sidebar (Right) */}
-                <div className="w-full md:w-96 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden h-auto md:h-auto">
+                <div className="order-first md:order-last w-full md:w-96 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden h-auto md:h-auto mb-6 md:mb-0">
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <h2 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5 text-primary" />
@@ -436,14 +443,24 @@ export default function POSPage() {
                             <span className="font-bold text-slate-900 dark:text-white text-lg">Total</span>
                             <span className="font-bold text-primary text-2xl">{formatRupiah(total)}</span>
                         </div>
-                        <button
-                            disabled={cart.length === 0}
-                            onClick={() => setShowCheckoutModal(true)}
-                            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                        >
-                            <CreditCard className="w-5 h-5" />
-                            Bayar Sekarang
-                        </button>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                disabled={cart.length === 0}
+                                onClick={() => processOrder('hold')}
+                                className="w-full bg-slate-100 hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                <ChefHat className="w-5 h-5" />
+                                <span className="hidden sm:inline">Dapur</span>
+                            </button>
+                            <button
+                                disabled={cart.length === 0}
+                                onClick={() => setShowCheckoutModal(true)}
+                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            >
+                                <CreditCard className="w-5 h-5" />
+                                Bayar
+                            </button>
+                        </div>
 
                         {currentOrderId && (
                             <button
@@ -483,7 +500,7 @@ export default function POSPage() {
                         </div>
 
                         {/* Payment Right Panel */}
-                        <div className="flex-1 p-6 flex flex-col">
+                        <div className="flex-1 p-6 flex flex-col overflow-y-auto">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="font-bold text-lg text-slate-900 dark:text-white">
                                     {isPaymentSuccess ? 'Transaksi Sukses' : 'Metode Pembayaran'}
@@ -572,21 +589,14 @@ export default function POSPage() {
                                         </div>
                                     )}
 
-                                    <div className="mt-auto grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={() => processOrder('hold')} // Hold -> Cooking Direct
-                                            className="px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-bold hover:border-slate-400 hover:text-slate-800 transition-colors"
-                                        >
-                                            <ChefHat className="w-5 h-5 mx-auto mb-1" />
-                                            <span className="text-xs">Masak / Dapur</span>
-                                        </button>
+                                    <div className="mt-auto">
                                         <button
                                             onClick={() => processOrder('pay')}
                                             disabled={!canPay}
-                                            className="bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 py-3 rounded-xl shadow-lg shadow-primary/25 transition-all text-center"
+                                            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 py-3 rounded-xl shadow-lg shadow-primary/25 transition-all text-center flex items-center justify-center gap-2"
                                         >
-                                            <Wallet className="w-5 h-5 mx-auto mb-1" />
-                                            <span className="text-xs">{paymentMethod === 'cash' ? 'Bayar' : 'Selesai'}</span>
+                                            <Wallet className="w-5 h-5" />
+                                            <span>{paymentMethod === 'cash' ? 'Bayar & Selesai' : 'Selesai'}</span>
                                         </button>
                                     </div>
                                 </>
@@ -605,6 +615,18 @@ export default function POSPage() {
                                     </div>
 
                                     <div className="space-y-3 mt-6">
+                                        <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                            <label className="text-xs font-semibold text-slate-500 block mb-1">Nomor WhatsApp Customer</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="tel"
+                                                    placeholder="628123456789"
+                                                    value={whatsappNumber}
+                                                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                                                    className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                                                />
+                                            </div>
+                                        </div>
                                         <button
                                             onClick={sendWhatsApp}
                                             className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-green-500/25 flex items-center justify-center gap-2"

@@ -341,7 +341,7 @@ ${expenseDetails}
 
 *List Belanjaan:*
 ${shoppingDetails}
-`;
+${user?.plan_type === 'free' ? '\n_Powered by Aplikasi Kasir Galang_' : ''}`;
             const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
 

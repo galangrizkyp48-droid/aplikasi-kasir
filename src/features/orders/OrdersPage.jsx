@@ -238,7 +238,13 @@ export default function OrdersPage() {
             `--------------------------------%0A` +
             `Total: *${formatRupiah(selectedOrder.total)}*%0A` +
             `Status: LUNAS (${paymentMethod.toUpperCase()})%0A%0A` +
-            `Terima kasih telah berbelanja!`;
+            `Status: LUNAS (${paymentMethod.toUpperCase()})%0A%0A`;
+
+        if (user?.plan_type === 'free') {
+            message += `_Powered by Aplikasi Kasir Galang_%0A`;
+        }
+
+        message += `Terima kasih telah berbelanja!`;
 
         window.open(`https://wa.me/?text=${message}`, '_blank');
     };

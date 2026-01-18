@@ -214,12 +214,15 @@ export default function DashboardLayout() {
                     return;
                 }
 
-                const { data: openShift, error } = await supabase
+                const { data: openShifts, error } = await supabase
                     .from('shifts')
                     .select('*')
                     .eq('store_id', user.storeId)
                     .eq('status', 'open')
-                    .single();
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                const openShift = openShifts?.[0];
 
                 if (error && error.code !== 'PGRST116') {
                     // Network error or other non-404 error

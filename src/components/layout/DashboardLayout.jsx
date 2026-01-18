@@ -239,7 +239,7 @@ export default function DashboardLayout() {
             }
         };
         loadInitial();
-    }, [user?.storeId, shiftId, isOffline]); // Re-run when online status changes
+    }, [user?.storeId, isOffline]); // REMOVED shiftId to prevent race condition loop
 
     const handleLogout = () => {
         logout();

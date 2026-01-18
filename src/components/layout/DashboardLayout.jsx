@@ -20,14 +20,18 @@ import {
     Trash2,
     Plus,
     Minus,
-    CreditCard
+    CreditCard,
+    ChefHat,
+    User
 } from 'lucide-react';
+import { useOrderProcessing } from '../../hooks/useOrderProcessing';
 
 export default function DashboardLayout() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const { isInstallable, install } = usePWA();
-    const { user, logout, cart, updateQuantity, clearCart, openCheckoutModal } = useStore();
+    const { user, logout, cart, updateQuantity, clearCart, openCheckoutModal, setCustomerName, currentCustomerName } = useStore();
     const { shiftId, setShiftId } = useStore();
+    const { processOrder } = useOrderProcessing();
     const navigate = useNavigate();
 
     const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
@@ -541,8 +545,21 @@ ${shoppingDetails}
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {/* Customer Name Input */}
+                            <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <label className="text-xs font-semibold text-slate-500 mb-1 block flex items-center gap-1">
+                                    <User className="w-3 h-3" /> Nama Pelanggan / Meja
+                                </label>
+                                <input
+                                    value={currentCustomerName || ''}
+                                    onChange={(e) => setCustomerName(e.target.value)}
+                                    placeholder="Contoh: Meja 5"
+                                    className="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 placeholder:font-normal text-slate-900 dark:text-white"
+                                />
+                            </div>
+
                             {cart.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center py-10">
                                     <ShoppingCart className="w-12 h-12 mb-3 opacity-20" />
                                     <p>Keranjang kosong</p>
                                 </div>
@@ -579,21 +596,35 @@ ${shoppingDetails}
                             <div className="flex justify-between items-end">
                                 <span className="font-bold text-slate-900 dark:text-white">Total</span>
                                 <span className="font-bold text-primary text-xl">
-                                    {formatRupiah(cart.reduce((sum, item) => sum + (item.price * item.quantity * 1.11), 0))}
+                                    {formatRupiah(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * 1.11)}
                                 </span>
                             </div>
-                            <button
-                                disabled={cart.length === 0}
-                                onClick={() => {
-                                    setIsMobileCartOpen(false);
-                                    openCheckoutModal();
-                                    navigate('/pos');
-                                }}
-                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
-                            >
-                                <CreditCard className="w-5 h-5" />
-                                Bayar Sekarang
-                            </button>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    disabled={cart.length === 0}
+                                    onClick={() => {
+                                        const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * 1.11;
+                                        setIsMobileCartOpen(false);
+                                        processOrder({ status: 'hold', total, customerName: currentCustomerName, navigate });
+                                    }}
+                                    className="w-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
+                                >
+                                    <ChefHat className="w-5 h-5" />
+                                    Dapur
+                                </button>
+                                <button
+                                    disabled={cart.length === 0}
+                                    onClick={() => {
+                                        setIsMobileCartOpen(false);
+                                        openCheckoutModal();
+                                        navigate('/pos');
+                                    }}
+                                    className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
+                                >
+                                    <CreditCard className="w-5 h-5" />
+                                    Bayar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -16,7 +16,6 @@ import {
     ShoppingBag,
     Lock,
     Wallet,
-    Wallet,
     Download,
     Trash2,
     Plus,

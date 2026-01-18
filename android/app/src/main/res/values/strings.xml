@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">POS_UMKM</string>
+    <string name="title_activity_main">POS_UMKM</string>
+    <string name="package_name">com.posumkm.app</string>
+    <string name="custom_url_scheme">com.posumkm.app</string>
+</resources>

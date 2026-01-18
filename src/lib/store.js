@@ -72,6 +72,21 @@ export const useStore = create(
             isCheckoutModalOpen: false,
             openCheckoutModal: () => set({ isCheckoutModalOpen: true }),
             closeCheckoutModal: () => set({ isCheckoutModalOpen: false }),
+
+            // Offline Support
+            isOffline: false,
+            setOfflineStatus: (status) => set({ isOffline: status }),
+
+            products: [], // Cached products
+            setProducts: (products) => set({ products }),
+
+            categories: [], // Cached categories
+            setCategories: (categories) => set({ categories }),
+
+            offlineQueue: [], // Array of { type: 'order'|'expense', data: any, id: string }
+            addToQueue: (item) => set((state) => ({ offlineQueue: [...state.offlineQueue, item] })),
+            removeFromQueue: (id) => set((state) => ({ offlineQueue: state.offlineQueue.filter(i => i.id !== id) })),
+            clearQueue: () => set({ offlineQueue: [] }),
         }),
         {
             name: 'pos-storage', // unique name
@@ -80,7 +95,10 @@ export const useStore = create(
                 shiftId: state.shiftId,
                 cart: state.cart,
                 currentOrderId: state.currentOrderId,
-                currentCustomerName: state.currentCustomerName
+                currentCustomerName: state.currentCustomerName,
+                products: state.products,
+                categories: state.categories,
+                offlineQueue: state.offlineQueue
             }), // Only persist these fields
         }
     )

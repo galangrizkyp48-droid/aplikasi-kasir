@@ -29,7 +29,12 @@ import { useOrderProcessing } from '../../hooks/useOrderProcessing';
 export default function DashboardLayout() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const { isInstallable, install } = usePWA();
-    const { user, logout, cart, updateQuantity, clearCart, openCheckoutModal, setCustomerName, currentCustomerName } = useStore();
+    const {
+        user, logout, cart, updateQuantity, clearCart, openCheckoutModal,
+        setCustomerName, currentCustomerName,
+        offlineQueue, removeFromQueue, isOffline, setOfflineStatus
+    } = useStore();
+
     const { shiftId, setShiftId } = useStore();
     const { processOrder } = useOrderProcessing();
     const navigate = useNavigate();
@@ -38,7 +43,93 @@ export default function DashboardLayout() {
 
     const [storeName, setStoreName] = useState('POS UMKM');
     const [activeShift, setActiveShift] = useState(null);
-    const APP_VERSION = 'v1.3.0'; // Update this to force visual change logic check
+    const APP_VERSION = 'v1.3.1';
+
+    // Sync Offline Data
+    const syncOfflineData = async () => {
+        if (offlineQueue.length === 0) return;
+
+        let syncedCount = 0;
+        console.log('Syncing offline data...', offlineQueue);
+
+        for (const item of offlineQueue) {
+            try {
+                if (item.type === 'ORDER') {
+                    const orderData = item.data;
+
+                    // 1. Create Order
+                    const { data: newOrder, error: orderError } = await supabase
+                        .from('orders')
+                        .insert([{
+                            status: orderData.status,
+                            total: orderData.total,
+                            customer_name: orderData.customer_name,
+                            shift_id: orderData.shift_id === 'offline_shift' ? (shiftId || null) : orderData.shift_id,
+                            store_id: orderData.store_id,
+                            created_at: orderData.created_at
+                        }])
+                        .select()
+                        .single();
+
+                    if (orderError) throw orderError;
+
+                    // 2. Create Items
+                    const items = orderData.items.map(i => ({
+                        order_id: newOrder.id,
+                        product_id: i.product_id,
+                        name: i.name,
+                        price: i.price,
+                        quantity: i.quantity
+                    }));
+
+                    const { error: itemsError } = await supabase.from('order_items').insert(items);
+                    if (itemsError) throw itemsError;
+
+                    // 3. Create Transaction (if paid)
+                    if (orderData.payment) {
+                        const { error: txError } = await supabase.from('transactions').insert([{
+                            order_id: newOrder.id,
+                            payment_method: orderData.payment.payment_method,
+                            amount: orderData.payment.amount,
+                            shift_id: newOrder.shift_id,
+                            store_id: orderData.store_id
+                        }]);
+                        if (txError) throw txError;
+                    }
+
+                    // Success
+                    removeFromQueue(item.id);
+                    syncedCount++;
+                }
+            } catch (error) {
+                console.error('Failed to sync item:', item.id, error);
+            }
+        }
+
+        if (syncedCount > 0) {
+            alert(`${syncedCount} data offline berhasil di-upload!`);
+        }
+    };
+
+    // Offline Listener
+    useEffect(() => {
+        const handleOnline = () => {
+            setOfflineStatus(false);
+            syncOfflineData();
+        };
+        const handleOffline = () => setOfflineStatus(true);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        setOfflineStatus(!navigator.onLine);
+        if (navigator.onLine) syncOfflineData();
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [offlineQueue]);
 
     // Initial Loaders
     useEffect(() => {

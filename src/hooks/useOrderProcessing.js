@@ -9,7 +9,8 @@ export const useOrderProcessing = () => {
         currentOrderId,
         setCurrentOrderId,
         clearCart,
-        closeCheckoutModal
+        closeCheckoutModal,
+        addToQueue
     } = useStore();
 
     const processOrder = async ({
@@ -26,6 +27,54 @@ export const useOrderProcessing = () => {
             if (status === 'pay') finalStatus = 'paid';
             else if (status === 'hold') finalStatus = 'cooking';
 
+            const finalCustomerName = (customerName || '').trim() || (finalStatus === 'paid' ? 'Walk-in Customer' : 'Table Order');
+
+            // --- OFFLINE HANDLING ---
+            if (!navigator.onLine) {
+                const tempId = currentOrderId || `offline_${Date.now()}`;
+
+                const offlineOrder = {
+                    id: tempId,
+                    created_at: new Date().toISOString(),
+                    status: status === 'save' ? 'pending' : finalStatus,
+                    total,
+                    customer_name: finalCustomerName,
+                    shift_id: shiftId || 'offline_shift',
+                    store_id: user?.storeId,
+                    items: cart.map(item => ({
+                        product_id: item.id,
+                        name: item.name,
+                        price: item.price,
+                        quantity: item.quantity
+                    })),
+                    payment: (finalStatus === 'paid' || finalStatus === 'completed') ? {
+                        payment_method: paymentMethod,
+                        amount: total
+                    } : null
+                };
+
+                addToQueue({
+                    id: tempId,
+                    type: 'ORDER',
+                    data: offlineOrder
+                });
+
+                // Offline Success Handling
+                if (finalStatus === 'paid' || finalStatus === 'completed') {
+                    setLastOrderId(tempId);
+                    setIsPaymentSuccess(true);
+                } else {
+                    clearCart();
+                    setCurrentOrderId(null);
+                    closeCheckoutModal();
+                    useStore.getState().setCustomerName('');
+                    alert('Mode Offline: Pesanan disimpan di perangkat!');
+                    if (navigate) navigate('/orders');
+                }
+                return;
+            }
+
+            // --- ONLINE HANDLING (Original Logic) ---
             let currentShiftId = shiftId;
             if (!currentShiftId) {
                 const { data: openShift } = await supabase
@@ -37,11 +86,9 @@ export const useOrderProcessing = () => {
                 if (openShift) currentShiftId = openShift.id;
             }
 
-            const finalCustomerName = (customerName || '').trim() || (finalStatus === 'paid' ? 'Walk-in Customer' : 'Table Order');
-
             let orderId = currentOrderId;
 
-            if (orderId) {
+            if (orderId && !orderId.startsWith('offline_')) {
                 // UPDATE
                 const updateData = {
                     total,
@@ -56,7 +103,11 @@ export const useOrderProcessing = () => {
                 // Replace items
                 await supabase.from('order_items').delete().eq('order_id', orderId);
             } else {
-                // CREATE
+                // CREATE or Update Offline ID to Real ID (if we were sync, but here we assume clean slate or only online IDs if connected)
+                // Actually if orderId starts with offline_, we should treat it as new insert in DB, but we need to handle that mapping. 
+                // Simpler: Just always insert new if it was offline ID, or handle it. 
+                // For now, let's treat it as new insert if not found.
+
                 const initialStatus = status === 'save' ? 'pending' : finalStatus;
                 const { data: newOrder, error } = await supabase
                     .from('orders')
